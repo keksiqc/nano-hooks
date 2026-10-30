@@ -26,15 +26,24 @@
   "scripts": {
     "lint": "oxlint",
     "fmt": "oxfmt",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepare": "nano-hooks"
   },
   "devDependencies": {
+    "nano-hooks": "link:",
     "oxfmt": "^0.75.0",
     "oxlint": "^1.90.0",
     "vitest": "^5.0.5"
   },
+  "nano-staged": {
+    "*": "pnpm run fmt",
+    "*.{js,jsx,ts,tsx,mjs,cjs}": "pnpm run lint"
+  },
   "engines": {
     "node": "^22 || >=24"
   },
-  "packageManager": "pnpm@12.15.0"
+  "packageManager": "pnpm@12.15.0",
+  "nano-hooks": {
+    "pre-commit": "nano-hooks staged"
+  }
 }

@@ -166,6 +166,9 @@ importers:
 
   .:
     devDependencies:
+      nano-hooks:
+        specifier: 'link:'
+        version: 'link:'
       oxfmt:
         specifier: ^0.75.0
         version: 0.75.0
