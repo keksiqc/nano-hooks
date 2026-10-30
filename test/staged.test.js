@@ -1,5 +1,5 @@
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, symlinkSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { PassThrough } from "node:stream";
 import { afterEach, describe, expect, it } from "vitest";
 import { getConfig } from "../src/staged/config.js";
@@ -165,6 +165,18 @@ describe("runStaged", () => {
 
     expect(r.git("show", ":c.js")).toBe("ONE\n");
     expect(r.git("ls-files", "a.js")).toBe("");
+  });
+
+  it("works when cwd is not the canonical path (symlink, Windows short name)", async () => {
+    const r = repo({ "a.js": "one\n" });
+    const link = join(dirname(r.dir), "link");
+    symlinkSync(r.dir, link, "junction");
+    r.write("a.js", "uno\n");
+    r.git("add", "a.js");
+
+    await run(r, { cwd: link, config: FMT_JS });
+
+    expect(r.git("show", ":a.js")).toBe("UNO\n");
   });
 
   it("passes filenames with spaces as single arguments", async () => {

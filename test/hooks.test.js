@@ -31,7 +31,10 @@ describe("install", () => {
     const script = readFileSync(hookPath(r, "pre-commit"), "utf8");
     expect(script.startsWith("#!/bin/sh\n# nano-hooks: managed file")).toBe(true);
     expect(script).toContain("echo hello");
-    expect(statSync(hookPath(r, "pre-commit")).mode & 0o111).toBe(0o111);
+    // Windows has no executable bit; git for Windows runs the script through sh anyway.
+    if (process.platform !== "win32") {
+      expect(statSync(hookPath(r, "pre-commit")).mode & 0o111).toBe(0o111);
+    }
   });
 
   it("auto-wires pre-commit to the staged runner when a staged config exists", async () => {
@@ -197,7 +200,9 @@ describe("install", () => {
   });
 
   it("works when the project path contains spaces and a quote", async () => {
-    const r = repo({ "pre-commit": "touch ran" }, { dirName: `my "proj" it's` });
+    // Double quotes are not allowed in Windows paths.
+    const dirName = process.platform === "win32" ? "my proj it's" : `my "proj" it's`;
+    const r = repo({ "pre-commit": "touch ran" }, { dirName });
     await install({ cwd: r.dir });
 
     commit(r);

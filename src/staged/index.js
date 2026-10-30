@@ -1,4 +1,5 @@
 // Based on nano-staged (MIT) https://github.com/usmanyunusov/nano-staged
+import { realpathSync } from "node:fs";
 import { getConfig, validConfig } from "./config.js";
 import { createReporter } from "./reporter.js";
 import { NanoStagedError } from "./errors.js";
@@ -7,6 +8,16 @@ import { createGit } from "./git.js";
 import { toArray } from "./utils.js";
 
 export { getConfig };
+
+// Git reports canonical paths (symlinks and Windows 8.3 short names resolved), and
+// file matching compares them with cwd, so cwd has to be canonical too.
+function canonical(path) {
+  try {
+    return realpathSync.native(path);
+  } catch {
+    return path;
+  }
+}
 
 export async function runStaged(options) {
   const opts = {
@@ -18,6 +29,7 @@ export async function runStaged(options) {
     bail: false,
     ...options,
   };
+  opts.cwd = canonical(opts.cwd);
 
   const reporter = createReporter(opts.stream);
   const git = createGit(opts.cwd);
