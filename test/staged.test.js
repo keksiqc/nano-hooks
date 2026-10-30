@@ -178,6 +178,26 @@ describe("runStaged", () => {
   });
 });
 
+describe("runStaged conflicts and bad configs", () => {
+  it("reports a merge conflict when unstaged changes cannot be restored", async () => {
+    const r = repo({ "a.js": "one\ntwo\nthree\n" });
+    r.write("a.js", "uno\ntwo\nthree\n");
+    r.git("add", "a.js");
+    r.write("a.js", "uno-x\ntwo\nthree\n");
+
+    expect(await failure(run(r, { config: FMT_JS }))).toContain("Merge conflict");
+    expect(r.read("a.js")).toContain("uno-x");
+  });
+
+  it("rejects with the file name when the config cannot be parsed", async () => {
+    const r = repo({ "a.js": "one\n", ".nano-staged.json": "{ not json" });
+    r.write("a.js", "uno\n");
+    r.git("add", "a.js");
+
+    expect(await failure(run(r))).toContain(".nano-staged.json");
+  });
+});
+
 describe("getConfig", () => {
   it("follows nano-staged precedence", async () => {
     const r = repo({

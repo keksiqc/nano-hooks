@@ -16,7 +16,7 @@ const places = [
   "package.json",
 ];
 
-async function readConfig(path) {
+async function loadFile(path) {
   if (fs.existsSync(path) && fs.lstatSync(path).isFile()) {
     const { ext, name } = parse(path);
 
@@ -32,25 +32,32 @@ async function readConfig(path) {
   }
 }
 
-export async function getConfig(cwd = process.cwd(), config = undefined) {
+// A broken nano-staged config file is an error (upstream silently ignored it).
+// A broken package.json is not ours to report, so it still counts as "no config".
+async function readConfig(path) {
   try {
-    if (config) {
-      return typeof config === "string" ? await readConfig(resolve(config)) : config;
-    }
-
-    let up = resolve(cwd);
-
-    do {
-      cwd = up;
-      for (const place of places) {
-        config = await readConfig(resolve(cwd, place));
-        if (config) return config;
-      }
-      up = resolve(cwd, "..");
-    } while (up !== cwd);
-  } catch {
-    return undefined;
+    return await loadFile(path);
+  } catch (error) {
+    if (parse(path).base === "package.json") return undefined;
+    throw new Error(`Failed to read ${path}: ${error.message}`, { cause: error });
   }
+}
+
+export async function getConfig(cwd = process.cwd(), config = undefined) {
+  if (config) {
+    return typeof config === "string" ? await readConfig(resolve(config)) : config;
+  }
+
+  let up = resolve(cwd);
+
+  do {
+    cwd = up;
+    for (const place of places) {
+      config = await readConfig(resolve(cwd, place));
+      if (config) return config;
+    }
+    up = resolve(cwd, "..");
+  } while (up !== cwd);
 }
 
 export function validConfig(config) {

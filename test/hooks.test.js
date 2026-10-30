@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { install, uninstall } from "../src/hooks.js";
-import { createRepo, createTempDir } from "./helpers.js";
+import { FMT, createRepo, createTempDir } from "./helpers.js";
 
 const cleanups = [];
 function repo(config = {}, options) {
@@ -160,6 +160,32 @@ describe("install", () => {
 
     await install({ cwd: wt });
 
+    expect(existsSync(hookPath(r, "pre-commit"))).toBe(true);
+  });
+
+  it("auto-wired pre-commit works when installed from a sub-package", async () => {
+    const r = createRepo({
+      "fmt.js": FMT,
+      "packages/app/a.js": "one\n",
+      "packages/app/.nano-staged.json": JSON.stringify({ "*.js": "node fmt.js" }),
+    });
+    cleanups.push(r.cleanup);
+    await install({ cwd: join(r.dir, "packages/app") });
+    r.write("packages/app/a.js", "uno\n");
+    r.git("add", "-A");
+
+    commit(r);
+
+    expect(r.git("show", "HEAD:packages/app/a.js")).toBe("UNO\n");
+  });
+
+  it("fails loudly on a malformed staged config and keeps the installed hook", async () => {
+    const r = repo();
+    writeFileSync(join(r.dir, ".nano-staged.json"), JSON.stringify({ "*.js": "echo" }));
+    await install({ cwd: r.dir });
+    writeFileSync(join(r.dir, ".nano-staged.json"), "{ not json");
+
+    await expect(install({ cwd: r.dir })).rejects.toThrow(/\.nano-staged\.json/);
     expect(existsSync(hookPath(r, "pre-commit"))).toBe(true);
   });
 

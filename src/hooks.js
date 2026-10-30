@@ -70,7 +70,8 @@ export async function install({ cwd = process.cwd() } = {}) {
 
   if (!hooks["pre-commit"] && (await getConfig(projectRoot))) {
     const runtime = process.versions.bun ? "bun" : "node";
-    hooks["pre-commit"] = `${runtime} ${quote(CLI_PATH)} staged`;
+    // Git runs hooks from the repository root; the staged config may live in a sub-package.
+    hooks["pre-commit"] = `cd ${quote(projectRoot)} && ${runtime} ${quote(CLI_PATH)} staged`;
   }
 
   mkdirSync(hooksDir, { recursive: true });
