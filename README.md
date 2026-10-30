@@ -62,15 +62,17 @@ pnpm fmt
 pnpm test
 ```
 
-CI checks formatting with `pnpm fmt --check`.
+`pnpm install` runs `prepare`, which installs this repository's own pre-commit hook. It runs `nano-hooks staged`, which formats staged files with `pnpm run fmt` and lints staged JavaScript with `pnpm run lint`.
+
+CI is the shared [`sxzz/workflows`](https://github.com/sxzz/workflows) Unit Test workflow (`.github/workflows/ci.yml`). It runs on pushes and pull requests to `main`: `pnpm run lint` once on Linux, and `pnpm run test` on Ubuntu and Windows with Node 22, 24 and 26. CI does not check formatting, so run `pnpm fmt` before you push.
 
 ## Note for Developers
 
-To publish the package for the first time, authenticate with npm and run `pnpm publish --access public` locally.
+To publish the package for the first time, authenticate with npm and run `pnpm publish --access public` locally. npm only lets you configure a trusted publisher for a package that already exists, so this first publish has to be manual.
 
-For automated releases, add an npm token with permission to publish this package as the repository's `NPM_TOKEN` Actions secret. The release workflow passes it to pnpm through `NODE_AUTH_TOKEN`.
+After that, add a trusted publisher for the package on npm: provider GitHub Actions, repository `keksiqc/nano-hooks`, workflow `release.yml`. The release workflow publishes through npm's trusted publishing (OIDC, `id-token: write`), so no `NPM_TOKEN` secret is needed.
 
-Update the version in `package.json`, commit the change, then push a matching `v*` tag, for example `v0.1.0`. GitHub Actions runs the checks, publishes with `pnpm publish --access public`, and creates a GitHub release with generated notes.
+To release, update the version in `package.json`, commit the change, then push a matching `v*` tag, for example `v0.1.1`. The release workflow (`.github/workflows/release.yml`, also from `sxzz/workflows`) creates a GitHub release with notes generated from the Conventional Commit messages and publishes with `pnpm -r publish --access public --no-git-checks`. It does not run lint or tests, so make sure CI is green on `main` before you tag.
 
 ## License
 
