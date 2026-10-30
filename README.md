@@ -3,7 +3,6 @@
 [![npm version][npm-version-src]][npm-version-href]
 [![npm downloads][npm-downloads-src]][npm-downloads-href]
 [![bundle][bundle-src]][bundle-href]
-[![JSDocs][jsdocs-src]][jsdocs-href]
 [![License][license-src]][license-href]
 
 A tiny Git hooks manager with zero dependencies and a built-in staged-file runner.
@@ -80,13 +79,11 @@ To release, update the version in `package.json`, commit the change, then push a
 
 <!-- Badges -->
 
-[npm-version-src]: https://img.shields.io/npm/v/nano-hooks?style=flat&colorA=080f12&colorB=1fa669
+[npm-version-src]: https://img.shields.io/npm/v/nano-hooks?style=for-the-badge
 [npm-version-href]: https://npmx.dev/package/nano-hooks
-[npm-downloads-src]: https://img.shields.io/npm/dm/nano-hooks?style=flat&colorA=080f12&colorB=1fa669
+[npm-downloads-src]: https://img.shields.io/npm/dm/nano-hooks?style=for-the-badge
 [npm-downloads-href]: https://npmx.dev/package/nano-hooks
-[bundle-src]: https://img.shields.io/bundlephobia/minzip/nano-hooks?style=flat&colorA=080f12&colorB=1fa669&label=minzip
+[bundle-src]: https://img.shields.io/bundlephobia/minzip/nano-hooks?style=for-the-badge&label=minzip
 [bundle-href]: https://bundlephobia.com/result?p=nano-hooks
-[license-src]: https://img.shields.io/github/license/keksiqc/nano-hooks.svg?style=flat&colorA=080f12&colorB=1fa669
+[license-src]: https://img.shields.io/github/license/keksiqc/nano-hooks.svg?style=for-the-badge
 [license-href]: https://github.com/keksiqc/nano-hooks/blob/main/LICENSE
-[jsdocs-src]: https://img.shields.io/badge/jsdocs-reference-080f12?style=flat&colorA=080f12&colorB=1fa669
-[jsdocs-href]: https://www.jsdocs.io/package/nano-hooks
