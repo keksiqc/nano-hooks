@@ -11,6 +11,9 @@
     "type": "git",
     "url": "git+https://github.com/keksiqc/nano-hooks.git"
   },
+  "bin": {
+    "nano-hooks": "./src/cli.js"
+  },
   "files": [
     "src"
   ],

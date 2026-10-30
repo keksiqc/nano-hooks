@@ -6,7 +6,50 @@
 [![JSDocs][jsdocs-src]][jsdocs-href]
 [![License][license-src]][license-href]
 
-A tiny Git hooks manager with zero dependencies.
+A tiny Git hooks manager with zero dependencies and a built-in staged-file runner.
+
+## Usage
+
+```sh
+pnpm add -D nano-hooks
+```
+
+Configure hooks in `package.json` (or `.nano-hooks.json`, `.nano-hooks.js`, `.nano-hooks.mjs`) and install them from a `prepare` script:
+
+```json
+{
+  "scripts": { "prepare": "nano-hooks" },
+  "nano-hooks": {
+    "commit-msg": "node scripts/check-msg.js $1"
+  },
+  "nano-staged": {
+    "*.{js,ts}": "eslint --fix",
+    "*.css": ["prettier --write"]
+  }
+}
+```
+
+When a `nano-staged` config exists and no `pre-commit` hook is configured, `pre-commit` runs the staged runner automatically. To run it alongside other commands, define `pre-commit` yourself, for example `"pre-commit": "nano-hooks staged && pnpm test"`.
+
+Hook scripts put `node_modules/.bin` on `PATH`, so locally installed tools just work. Set `SKIP_NANO_HOOKS=1` to skip every hook for one command, for example `SKIP_NANO_HOOKS=1 git commit`.
+
+Hooks that already exist and were not written by nano-hooks are never overwritten or removed. `install` reports them and moves on. Hooks that nano-hooks wrote earlier but are no longer configured are removed, unless `preserveUnused` is `true` or lists their names.
+
+### CLI
+
+| Command                              | Description                                              |
+| ------------------------------------ | -------------------------------------------------------- |
+| `nano-hooks` or `nano-hooks install` | Write the configured hooks.                              |
+| `nano-hooks uninstall`               | Remove the hooks nano-hooks manages.                     |
+| `nano-hooks staged`                  | Run the commands from the staged config on staged files. |
+
+`staged` accepts `-c, --config <path>`, `--allow-empty` and `--bail`.
+
+## Staged files
+
+The `staged` command is based on [nano-staged](https://github.com/usmanyunusov/nano-staged) by Usman Yunusov (MIT). It reads nano-staged's own config format and file locations, so an existing nano-staged config works unchanged. nano-hooks only supports staged files, so nano-staged's `--diff` and `--unstaged` modes are not included.
+
+Unstaged changes to partially staged files are set aside while the commands run, formatter changes are added back to the commit, and everything is rolled back if a command fails.
 
 ## Development
 

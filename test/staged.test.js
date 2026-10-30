@@ -4,17 +4,7 @@ import { PassThrough } from "node:stream";
 import { afterEach, describe, expect, it } from "vitest";
 import { getConfig } from "../src/staged/config.js";
 import { runStaged } from "../src/staged/index.js";
-import { createRepo } from "./helpers.js";
-
-const FMT = `const fs = require("node:fs");
-for (const file of process.argv.slice(2)) {
-  const [first, ...rest] = fs.readFileSync(file, "utf8").split("\\n");
-  fs.writeFileSync(file, [first.toUpperCase(), ...rest].join("\\n"));
-}
-`;
-const FAIL = `process.exit(1);\n`;
-const RESET = `require("node:fs").writeFileSync("a.js", "x\\n");\n`;
-const MARK = `require("node:fs").writeFileSync("marker", "1");\n`;
+import { FAIL, FMT, MARK, RESET, createRepo } from "./helpers.js";
 
 const repos = [];
 function repo(files, options) {

@@ -7,7 +7,10 @@ import { NanoStagedError } from "./errors.js";
 
 export function createRunner({ allowEmpty, git_paths, config, stream, files, cwd, quiet, bail }) {
   const reporter = createReporter(stream);
-  const renderer = createRenderer(stream, { isTTY: !process.env.CI, quiet });
+  const renderer = createRenderer(stream, {
+    isTTY: Boolean(stream.isTTY) && !process.env.CI,
+    quiet,
+  });
 
   const type = "staged";
 

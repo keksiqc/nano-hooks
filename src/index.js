@@ -1,2 +1,3 @@
-export const one = 1;
-export const two = 2;
+export { loadConfig } from "./config.js";
+export { install, uninstall } from "./hooks.js";
+export { runStaged } from "./staged/index.js";

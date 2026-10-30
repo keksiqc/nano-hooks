@@ -3,6 +3,16 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
+export const FMT = `const fs = require("node:fs");
+for (const file of process.argv.slice(2)) {
+  const [first, ...rest] = fs.readFileSync(file, "utf8").split("\\n");
+  fs.writeFileSync(file, [first.toUpperCase(), ...rest].join("\\n"));
+}
+`;
+export const FAIL = `process.exit(1);\n`;
+export const RESET = `require("node:fs").writeFileSync("a.js", "x\\n");\n`;
+export const MARK = `require("node:fs").writeFileSync("marker", "1");\n`;
+
 /** Create an empty temp directory that is not a git repository. */
 export function createTempDir(dirName = "work") {
   const root = mkdtempSync(join(tmpdir(), "nano-hooks-"));
@@ -19,7 +29,11 @@ export function createRepo(files = {}, options = {}) {
   const { dir, cleanup } = createTempDir(options.dirName);
 
   function git(...args) {
-    return execFileSync("git", args, { cwd: dir, encoding: "utf8" });
+    return execFileSync("git", args, {
+      cwd: dir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
   }
 
   function write(path, content) {
