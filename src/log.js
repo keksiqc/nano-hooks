@@ -15,11 +15,15 @@ export function highlight(message) {
 }
 
 const print = (symbol, message) => process.stderr.write(`${symbol} ${message}\n`);
+const format = (message, { markup = true } = {}) => (markup ? highlight(message) : message);
 
-/** Status lines, written to stderr so stdout stays clean. */
+/**
+ * Status lines, written to stderr so stdout stays clean. Pass `{ markup: false }`
+ * for text that may contain literal asterisks, such as glob patterns.
+ */
 export const log = {
-  success: (message) => print(symbols.done, highlight(message)),
-  warn: (message) => print(symbols.warn, highlight(message)),
-  info: (message) => print(symbols.info, highlight(message)),
-  error: (message) => print(symbols.fail, styleText("red", highlight(message))),
+  success: (message, options) => print(symbols.done, format(message, options)),
+  warn: (message, options) => print(symbols.warn, format(message, options)),
+  info: (message, options) => print(symbols.info, format(message, options)),
+  error: (message, options) => print(symbols.fail, styleText("red", format(message, options))),
 };

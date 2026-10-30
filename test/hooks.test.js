@@ -6,8 +6,9 @@ import { install, uninstall } from "../src/hooks.js";
 import { FMT, createRepo, createTempDir } from "./helpers.js";
 
 const cleanups = [];
-function repo(config = {}, options) {
-  const r = createRepo({ ".nano-hooks.json": JSON.stringify(config) }, options);
+/** Repo whose nano-hooks config has the given hooks, plus any extra sections. */
+function repo(hooks = {}, options, extra = {}) {
+  const r = createRepo({ ".nano-hooks.json": JSON.stringify({ hooks, ...extra }) }, options);
   cleanups.push(r.cleanup);
   return r;
 }
@@ -38,8 +39,7 @@ describe("install", () => {
   });
 
   it("auto-wires pre-commit to the staged runner when a staged config exists", async () => {
-    const r = repo();
-    writeFileSync(join(r.dir, ".nano-staged.json"), JSON.stringify({ "*.js": "echo" }));
+    const r = repo({}, undefined, { staged: { "*.js": "echo" } });
 
     await install({ cwd: r.dir });
 
@@ -47,8 +47,7 @@ describe("install", () => {
   });
 
   it("does not auto-wire when pre-commit is configured", async () => {
-    const r = repo({ "pre-commit": "echo mine" });
-    writeFileSync(join(r.dir, ".nano-staged.json"), JSON.stringify({ "*.js": "echo" }));
+    const r = repo({ "pre-commit": "echo mine" }, undefined, { staged: { "*.js": "echo" } });
 
     await install({ cwd: r.dir });
 
@@ -101,7 +100,10 @@ describe("install", () => {
   it("removes managed hooks that are no longer configured", async () => {
     const r = repo({ "pre-commit": "echo a", "commit-msg": "echo b" });
     await install({ cwd: r.dir });
-    writeFileSync(join(r.dir, ".nano-hooks.json"), JSON.stringify({ "pre-commit": "echo a" }));
+    writeFileSync(
+      join(r.dir, ".nano-hooks.json"),
+      JSON.stringify({ hooks: { "pre-commit": "echo a" } }),
+    );
 
     const result = await install({ cwd: r.dir });
 
@@ -115,7 +117,7 @@ describe("install", () => {
     await install({ cwd: r.dir });
     writeFileSync(
       join(r.dir, ".nano-hooks.json"),
-      JSON.stringify({ "pre-commit": "echo a", preserveUnused: true }),
+      JSON.stringify({ hooks: { "pre-commit": "echo a" }, preserveUnused: true }),
     );
 
     await install({ cwd: r.dir });
@@ -128,7 +130,7 @@ describe("install", () => {
     await install({ cwd: r.dir });
     writeFileSync(
       join(r.dir, ".nano-hooks.json"),
-      JSON.stringify({ "pre-commit": "echo a", preserveUnused: ["commit-msg"] }),
+      JSON.stringify({ hooks: { "pre-commit": "echo a" }, preserveUnused: ["commit-msg"] }),
     );
 
     await install({ cwd: r.dir });
@@ -170,7 +172,7 @@ describe("install", () => {
     const r = createRepo({
       "fmt.js": FMT,
       "packages/app/a.js": "one\n",
-      "packages/app/.nano-staged.json": JSON.stringify({ "*.js": "node fmt.js" }),
+      "packages/app/.nano-hooks.json": JSON.stringify({ staged: { "*.js": "node fmt.js" } }),
     });
     cleanups.push(r.cleanup);
     await install({ cwd: join(r.dir, "packages/app") });
@@ -182,13 +184,12 @@ describe("install", () => {
     expect(r.git("show", "HEAD:packages/app/a.js")).toBe("UNO\n");
   });
 
-  it("fails loudly on a malformed staged config and keeps the installed hook", async () => {
-    const r = repo();
-    writeFileSync(join(r.dir, ".nano-staged.json"), JSON.stringify({ "*.js": "echo" }));
+  it("fails loudly on a malformed config and keeps the installed hook", async () => {
+    const r = repo({}, undefined, { staged: { "*.js": "echo" } });
     await install({ cwd: r.dir });
-    writeFileSync(join(r.dir, ".nano-staged.json"), "{ not json");
+    writeFileSync(join(r.dir, ".nano-hooks.json"), "{ not json");
 
-    await expect(install({ cwd: r.dir })).rejects.toThrow(/\.nano-staged\.json/);
+    await expect(install({ cwd: r.dir })).rejects.toThrow(/\.nano-hooks\.json/);
     expect(existsSync(hookPath(r, "pre-commit"))).toBe(true);
   });
 

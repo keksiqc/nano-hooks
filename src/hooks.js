@@ -11,7 +11,6 @@ import {
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
-import { getConfig } from "./staged/config.js";
 
 const MARKER = "# nano-hooks: managed file, do not edit";
 const CLI_PATH = fileURLToPath(new URL("./cli.js", import.meta.url));
@@ -66,9 +65,10 @@ function managedHooks(hooksDir) {
 export async function install({ cwd = process.cwd() } = {}) {
   const projectRoot = resolve(cwd);
   const hooksDir = resolveHooksDir(projectRoot);
-  const { hooks, preserveUnused } = await loadConfig(projectRoot);
+  const { hooks: configured, staged, preserveUnused } = await loadConfig(projectRoot);
+  const hooks = { ...configured };
 
-  if (!hooks["pre-commit"] && (await getConfig(projectRoot))) {
+  if (!hooks["pre-commit"] && staged) {
     const runtime = process.versions.bun ? "bun" : "node";
     // Git runs hooks from the repository root; the staged config may live in a sub-package.
     hooks["pre-commit"] = `cd ${quote(projectRoot)} && ${runtime} ${quote(CLI_PATH)} staged`;

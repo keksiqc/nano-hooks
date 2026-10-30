@@ -2,7 +2,6 @@ import { existsSync, symlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { PassThrough } from "node:stream";
 import { afterEach, describe, expect, it } from "vitest";
-import { getConfig } from "../src/staged/config.js";
 import { runStaged } from "../src/staged/index.js";
 import { FAIL, FMT, MARK, RESET, createRepo } from "./helpers.js";
 
@@ -115,25 +114,24 @@ describe("runStaged", () => {
     r.write("a.js", "uno\n");
     r.git("add", "a.js");
 
-    expect(await failure(run(r))).toMatch(/Create Nano Staged config/);
+    expect(await failure(run(r))).toMatch(/No staged tasks configured/);
   });
 
-  it("supports function values in a JS config", async () => {
+  it("supports function values in a JS config file", async () => {
     const r = repo({
       "a.js": "one\n",
-      ".nano-staged.mjs": `export default { "*.js": ({ filenames }) => ["node fmt.js " + filenames.join(" ")] };\n`,
+      "tasks.mjs": `export default { "*.js": ({ filenames }) => ["node fmt.js " + filenames.join(" ")] };\n`,
     });
     r.write("a.js", "uno\n");
     r.git("add", "a.js");
 
-    await run(r);
+    await run(r, { config: join(r.dir, "tasks.mjs") });
 
     expect(r.git("show", ":a.js")).toBe("UNO\n");
   });
 
   it("only processes files under cwd in a sub-package", async () => {
     const r = repo({
-      "packages/a/.nano-staged.json": JSON.stringify(FMT_JS),
       "packages/a/x.js": "one\n",
       "packages/b/y.js": "two\n",
     });
@@ -141,7 +139,7 @@ describe("runStaged", () => {
     r.write("packages/b/y.js", "dos\n");
     r.git("add", "-A");
 
-    await run(r, { cwd: join(r.dir, "packages/a") });
+    await run(r, { cwd: join(r.dir, "packages/a"), config: FMT_JS });
 
     expect(r.git("show", ":packages/a/x.js")).toBe("UNO\n");
     expect(r.git("show", ":packages/b/y.js")).toBe("dos\n");
@@ -202,21 +200,10 @@ describe("runStaged conflicts and bad configs", () => {
   });
 
   it("rejects with the file name when the config cannot be parsed", async () => {
-    const r = repo({ "a.js": "one\n", ".nano-staged.json": "{ not json" });
+    const r = repo({ "a.js": "one\n", "bad.json": "{ not json" });
     r.write("a.js", "uno\n");
     r.git("add", "a.js");
 
-    expect(await failure(run(r))).toContain(".nano-staged.json");
-  });
-});
-
-describe("getConfig", () => {
-  it("follows nano-staged precedence", async () => {
-    const r = repo({
-      ".nano-staged.json": JSON.stringify({ "*.js": "a" }),
-      "package.json": JSON.stringify({ "nano-staged": { "*.css": "b" } }),
-    });
-
-    expect(await getConfig(r.dir)).toEqual({ "*.js": "a" });
+    expect(await failure(run(r, { config: join(r.dir, "bad.json") }))).toContain("bad.json");
   });
 });

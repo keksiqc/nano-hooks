@@ -20,11 +20,13 @@ const stage = (r, path, content) => {
   r.write(path, content);
   r.git("add", path);
 };
-const fmtConfig = JSON.stringify({ "*.js": "node fmt.js" });
+const fmtMap = { "*.js": "node fmt.js" };
+const fmtConfig = JSON.stringify(fmtMap);
+const stagedConfig = JSON.stringify({ staged: fmtMap });
 
 describe("nano-hooks staged", () => {
   it("formats staged files and exits 0", () => {
-    const r = repo({ "a.js": "one\n", ".nano-staged.json": fmtConfig });
+    const r = repo({ "a.js": "one\n", ".nano-hooks.json": stagedConfig });
     stage(r, "a.js", "uno\n");
 
     const result = nano(r, "staged");
@@ -34,7 +36,7 @@ describe("nano-hooks staged", () => {
   });
 
   it("prints no cursor control sequences when stderr is not a TTY", () => {
-    const r = repo({ "a.js": "one\n", ".nano-staged.json": fmtConfig });
+    const r = repo({ "a.js": "one\n", ".nano-hooks.json": stagedConfig });
     stage(r, "a.js", "uno\n");
 
     const result = nano(r, "staged");
@@ -45,7 +47,7 @@ describe("nano-hooks staged", () => {
   it("exits 1 when a command fails", () => {
     const r = repo({
       "a.js": "one\n",
-      ".nano-staged.json": JSON.stringify({ "*.js": "node fail.js" }),
+      ".nano-hooks.json": JSON.stringify({ staged: { "*.js": "node fail.js" } }),
     });
     stage(r, "a.js", "uno\n");
 
@@ -64,7 +66,18 @@ describe("nano-hooks staged", () => {
     const result = nano(r, "staged");
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toMatch(/Create Nano Staged config/);
+    expect(result.stderr).toMatch(/No staged tasks configured/);
+  });
+
+  it("exits 1 and lists the problems when the config is invalid", () => {
+    const r = repo({ "a.js": "one\n", ".nano-hooks.json": JSON.stringify({ "pre-commit": "x" }) });
+    stage(r, "a.js", "uno\n");
+
+    const result = nano(r, "staged");
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("× Invalid nano-hooks config in .nano-hooks.json:");
+    expect(result.stderr).toContain("pre-commit");
   });
 
   it("--config points at a specific file", () => {
@@ -78,7 +91,7 @@ describe("nano-hooks staged", () => {
   it("--allow-empty lets an emptied commit through", () => {
     const r = repo({
       "a.js": "x\n",
-      ".nano-staged.json": JSON.stringify({ "*.js": "node reset.js" }),
+      ".nano-hooks.json": JSON.stringify({ staged: { "*.js": "node reset.js" } }),
     });
     stage(r, "a.js", "y\n");
 
@@ -87,7 +100,7 @@ describe("nano-hooks staged", () => {
   });
 
   it("--bail is accepted", () => {
-    const r = repo({ "a.js": "one\n", ".nano-staged.json": fmtConfig });
+    const r = repo({ "a.js": "one\n", ".nano-hooks.json": stagedConfig });
     stage(r, "a.js", "uno\n");
 
     expect(nano(r, "staged", "--bail").status).toBe(0);
@@ -96,7 +109,7 @@ describe("nano-hooks staged", () => {
 
 describe("nano-hooks install / uninstall", () => {
   it("install writes hooks and uninstall removes them", () => {
-    const r = repo({ ".nano-hooks.json": JSON.stringify({ "pre-commit": "echo a" }) });
+    const r = repo({ ".nano-hooks.json": JSON.stringify({ hooks: { "pre-commit": "echo a" } }) });
     const hook = join(r.dir, ".git/hooks/pre-commit");
 
     const installed = nano(r);
@@ -111,6 +124,16 @@ describe("nano-hooks install / uninstall", () => {
     expect(existsSync(hook)).toBe(false);
   });
 
+  it("install reports an invalid config in the same style", () => {
+    const r = repo({ ".nano-hooks.json": JSON.stringify({ hooks: { "pre-comit": "x" } }) });
+
+    const result = nano(r, "install");
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/^× Invalid nano-hooks config in \.nano-hooks\.json:\n/);
+    expect(result.stderr).toContain("hooks.pre-comit: unknown git hook");
+  });
+
   it("says so when there is nothing to install or uninstall", () => {
     const r = repo();
 
@@ -119,9 +142,9 @@ describe("nano-hooks install / uninstall", () => {
   });
 
   it("reports removed and skipped hooks in the same style", () => {
-    const r = repo({ ".nano-hooks.json": JSON.stringify({ "pre-commit": "echo a" }) });
+    const r = repo({ ".nano-hooks.json": JSON.stringify({ hooks: { "pre-commit": "echo a" } }) });
     nano(r, "install");
-    r.write(".nano-hooks.json", JSON.stringify({ "pre-push": "echo b" }));
+    r.write(".nano-hooks.json", JSON.stringify({ hooks: { "pre-push": "echo b" } }));
     r.write(".git/hooks/pre-push", "#!/bin/sh\necho mine\n");
 
     const result = nano(r, "install");
@@ -172,7 +195,7 @@ describe("end to end", () => {
   it("a commit runs the staged runner through the installed hook", () => {
     const r = repo({
       "a.js": "one\n",
-      "package.json": JSON.stringify({ "nano-staged": { "*.js": "node fmt.js" } }),
+      "package.json": JSON.stringify({ "nano-hooks": { staged: fmtMap } }),
     });
     expect(nano(r, "install").status).toBe(0);
     stage(r, "a.js", "uno\n");

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { loadConfig } from "./config.js";
 import { install, uninstall } from "./hooks.js";
 import { log } from "./log.js";
 import { runStaged } from "./staged/index.js";
@@ -63,6 +64,7 @@ async function main(argv) {
 
     if (command === "staged") {
       const options = parseStaged(args);
+      if (!options.config) options.config = (await loadConfig()).staged;
       // Let rollback finish if the user interrupts a running commit.
       process.on("SIGINT", () => {});
       try {
@@ -74,7 +76,7 @@ async function main(argv) {
       return 0;
     }
   } catch (error) {
-    log.error(error.message);
+    log.error(error.message, { markup: false });
     return 1;
   }
 

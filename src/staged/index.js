@@ -7,8 +7,6 @@ import { createRunner } from "./runner.js";
 import { createGit } from "./git.js";
 import { toArray } from "./utils.js";
 
-export { getConfig };
-
 // Git reports canonical paths (symlinks and Windows 8.3 short names resolved), and
 // file matching compares them with cwd, so cwd has to be canonical too.
 function canonical(path) {
@@ -35,7 +33,7 @@ export async function runStaged(options) {
   const git = createGit(opts.cwd);
 
   try {
-    const config = await getConfig(opts.cwd, opts.config);
+    const config = await getConfig(opts.config);
     const git_paths = await git.getGitPaths();
 
     if (!config) {

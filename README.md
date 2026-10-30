@@ -13,22 +13,33 @@ A tiny Git hooks manager with zero dependencies and a built-in staged-file runne
 pnpm add -D nano-hooks
 ```
 
-Configure hooks in `package.json` (or `.nano-hooks.json`, `.nano-hooks.js`, `.nano-hooks.mjs`) and install them from a `prepare` script:
+Configure everything in one place: the `nano-hooks` key in `package.json`, or `.nano-hooks.json`, `.nano-hooks.js` or `.nano-hooks.mjs`. Install the hooks from a `prepare` script:
 
 ```json
 {
   "scripts": { "prepare": "nano-hooks" },
   "nano-hooks": {
-    "commit-msg": "node scripts/check-msg.js $1"
-  },
-  "nano-staged": {
-    "*.{js,ts}": "eslint --fix",
-    "*.css": ["prettier --write"]
+    "hooks": {
+      "commit-msg": "node scripts/check-msg.js $1"
+    },
+    "staged": {
+      "*.{js,ts}": "eslint --fix",
+      "*.css": ["prettier --write"]
+    },
+    "preserveUnused": ["pre-push"]
   }
 }
 ```
 
-When a `nano-staged` config exists and no `pre-commit` hook is configured, `pre-commit` runs the staged runner automatically. To run it alongside other commands, define `pre-commit` yourself, for example `"pre-commit": "nano-hooks staged && pnpm test"`.
+| Section          | Description                                                                                                                                           |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hooks`          | Git hook name mapped to the shell command it runs.                                                                                                    |
+| `staged`         | Glob pattern mapped to a command, a list of commands, or (in a JS config) a function returning them. This is the same format as a nano-staged config. |
+| `preserveUnused` | `true`, or a list of hook names, to keep hooks that nano-hooks wrote earlier but that are no longer in `hooks`.                                       |
+
+All three sections are optional. A config with a mistake is rejected with every problem listed, naming the file and the key, for example `hooks.pre-comit: unknown git hook`.
+
+When `staged` is set and `hooks` has no `pre-commit`, `pre-commit` runs the staged runner automatically. To run it alongside other commands, define `pre-commit` yourself, for example `"pre-commit": "nano-hooks staged && pnpm test"`.
 
 Hook scripts put `node_modules/.bin` on `PATH`, so locally installed tools just work. Set `SKIP_NANO_HOOKS=1` to skip every hook for one command, for example `SKIP_NANO_HOOKS=1 git commit`.
 
@@ -36,17 +47,17 @@ Hooks that already exist and were not written by nano-hooks are never overwritte
 
 ### CLI
 
-| Command                              | Description                                              |
-| ------------------------------------ | -------------------------------------------------------- |
-| `nano-hooks` or `nano-hooks install` | Write the configured hooks.                              |
-| `nano-hooks uninstall`               | Remove the hooks nano-hooks manages.                     |
-| `nano-hooks staged`                  | Run the commands from the staged config on staged files. |
+| Command                              | Description                                 |
+| ------------------------------------ | ------------------------------------------- |
+| `nano-hooks` or `nano-hooks install` | Write the configured hooks.                 |
+| `nano-hooks uninstall`               | Remove the hooks nano-hooks manages.        |
+| `nano-hooks staged`                  | Run the `staged` tasks on the staged files. |
 
-`staged` accepts `-c, --config <path>`, `--allow-empty` and `--bail`.
+`staged` accepts `-c, --config <path>` (a nano-staged format file to use instead of the `staged` section), `--allow-empty` and `--bail`.
 
 ## Staged files
 
-The `staged` command is based on [nano-staged](https://github.com/usmanyunusov/nano-staged) by Usman Yunusov (MIT). It reads nano-staged's own config format and file locations, so an existing nano-staged config works unchanged. nano-hooks only supports staged files, so nano-staged's `--diff` and `--unstaged` modes are not included.
+The `staged` command is based on [nano-staged](https://github.com/usmanyunusov/nano-staged) by Usman Yunusov (MIT). The `staged` section uses nano-staged's own task format, so moving from nano-staged means moving its config under `staged` in the nano-hooks config. nano-hooks does not read `.nano-staged.*` files or the `nano-staged` key. It only supports staged files, so nano-staged's `--diff` and `--unstaged` modes are not included.
 
 Unstaged changes to partially staged files are set aside while the commands run, formatter changes are added back to the commit, and everything is rolled back if a command fails.
 

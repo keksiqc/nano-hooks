@@ -1,9 +1,9 @@
 // Based on nano-staged (MIT) https://github.com/usmanyunusov/nano-staged
 const MESSAGES = {
-  noConfig: () => "Create Nano Staged config.",
-  noFileConfig: (path) => `Nano Staged config file *${path}* is not found.`,
-  invalidConfig: () => "Nano Staged config invalid.",
-  noGitRepo: () => "Nano Staged didn’t find git directory.",
+  noConfig: () => "No staged tasks configured. Add a *staged* section to your nano-hooks config.",
+  noFileConfig: (path) => `Staged config file *${path}* is not found.`,
+  invalidConfig: () => "Staged config is invalid.",
+  noGitRepo: () => "Not a git repository.",
   noFiles: (type) => `No ${type} files found.`,
   noMatchingFiles: () => "No files match any configured task.",
 };

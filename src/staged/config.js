@@ -3,19 +3,6 @@ import { resolve, parse } from "path";
 import { pathToFileURL } from "url";
 import fs from "fs";
 
-const places = [
-  `.nano-staged.js`,
-  `nano-staged.js`,
-  `.nano-staged.cjs`,
-  `nano-staged.cjs`,
-  `.nano-staged.mjs`,
-  `nano-staged.mjs`,
-  `.nano-staged.json`,
-  `nano-staged.json`,
-  `.nanostagedrc`,
-  "package.json",
-];
-
 async function loadFile(path) {
   if (fs.existsSync(path) && fs.lstatSync(path).isFile()) {
     const { ext, name } = parse(path);
@@ -43,21 +30,10 @@ async function readConfig(path) {
   }
 }
 
-export async function getConfig(cwd = process.cwd(), config = undefined) {
-  if (config) {
-    return typeof config === "string" ? await readConfig(resolve(config)) : config;
-  }
-
-  let up = resolve(cwd);
-
-  do {
-    cwd = up;
-    for (const place of places) {
-      config = await readConfig(resolve(cwd, place));
-      if (config) return config;
-    }
-    up = resolve(cwd, "..");
-  } while (up !== cwd);
+// Discovery lives in src/config.js; this only resolves what runStaged was given.
+export async function getConfig(config) {
+  if (!config) return undefined;
+  return typeof config === "string" ? await readConfig(resolve(config)) : config;
 }
 
 export function validConfig(config) {

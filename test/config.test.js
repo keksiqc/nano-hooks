@@ -10,10 +10,22 @@ function repo(files) {
 }
 afterEach(() => repos.splice(0).forEach((r) => r.cleanup()));
 
+const json = (value) => JSON.stringify(value);
+
+async function problems(files) {
+  const r = repo(files);
+  try {
+    await loadConfig(r.dir);
+  } catch (error) {
+    return error.message;
+  }
+  throw new Error("expected loadConfig to reject");
+}
+
 describe("loadConfig", () => {
   it("reads the nano-hooks key from package.json", async () => {
     const r = repo({
-      "package.json": JSON.stringify({ "nano-hooks": { "pre-commit": "echo hi" } }),
+      "package.json": json({ "nano-hooks": { hooks: { "pre-commit": "echo hi" } } }),
     });
 
     expect(await loadConfig(r.dir)).toEqual({
@@ -24,46 +36,90 @@ describe("loadConfig", () => {
 
   it("prefers .nano-hooks.json over package.json", async () => {
     const r = repo({
-      ".nano-hooks.json": JSON.stringify({ "commit-msg": "a" }),
-      "package.json": JSON.stringify({ "nano-hooks": { "pre-commit": "b" } }),
+      ".nano-hooks.json": json({ hooks: { "commit-msg": "a" } }),
+      "package.json": json({ "nano-hooks": { hooks: { "pre-commit": "b" } } }),
     });
 
     expect((await loadConfig(r.dir)).hooks).toEqual({ "commit-msg": "a" });
   });
 
-  it("loads the .nano-hooks.mjs default export", async () => {
-    const r = repo({ ".nano-hooks.mjs": `export default { "pre-push": "echo push" };\n` });
+  it("loads the .nano-hooks.mjs default export, keeping function tasks", async () => {
+    const task = "({ filenames }) => []";
+    const r = repo({
+      ".nano-hooks.mjs": `export default { hooks: { "pre-push": "echo push" }, staged: { "*.js": ${task} } };\n`,
+    });
 
-    expect((await loadConfig(r.dir)).hooks).toEqual({ "pre-push": "echo push" });
+    const config = await loadConfig(r.dir);
+
+    expect(config.hooks).toEqual({ "pre-push": "echo push" });
+    expect(typeof config.staged["*.js"]).toBe("function");
   });
 
-  it("returns empty hooks when no config exists", async () => {
-    const r = repo({ "package.json": JSON.stringify({ name: "x" }) });
+  it("returns empty defaults when no config exists", async () => {
+    const r = repo({ "package.json": json({ name: "x" }) });
 
     expect(await loadConfig(r.dir)).toEqual({ hooks: {}, preserveUnused: false });
   });
 
-  it("separates preserveUnused from hooks", async () => {
+  it("reads all three sections", async () => {
     const r = repo({
-      ".nano-hooks.json": JSON.stringify({ "pre-commit": "x", preserveUnused: ["commit-msg"] }),
+      ".nano-hooks.json": json({
+        hooks: { "pre-commit": "x" },
+        staged: { "*.js": "eslint", "*.css": ["a", "b"] },
+        preserveUnused: ["commit-msg"],
+      }),
     });
 
     expect(await loadConfig(r.dir)).toEqual({
       hooks: { "pre-commit": "x" },
+      staged: { "*.js": "eslint", "*.css": ["a", "b"] },
       preserveUnused: ["commit-msg"],
     });
   });
 
-  it("rejects an unknown hook name", async () => {
-    const r = repo({ ".nano-hooks.json": JSON.stringify({ "pre-comit": "x" }) });
+  it("reports every problem at once with the file name and key paths", async () => {
+    const message = await problems({
+      ".nano-hooks.json": json({
+        hooks: { "pre-comit": "x", "commit-msg": "" },
+        preserveUnused: "yes",
+        staged: { "*.js": 5 },
+        foo: 1,
+      }),
+    });
 
-    await expect(loadConfig(r.dir)).rejects.toThrow("pre-comit");
+    expect(message.split("\n")[0]).toBe("Invalid nano-hooks config in .nano-hooks.json:");
+    expect(message).toContain("hooks.pre-comit: unknown git hook");
+    expect(message).toContain("hooks.commit-msg: must be a non-empty command string");
+    expect(message).toContain("preserveUnused: must be true, false or a list of hook names");
+    expect(message).toContain(
+      'staged["*.js"]: must be a command, a list of commands or a function',
+    );
+    expect(message).toContain("foo: unknown option (expected hooks, staged or preserveUnused)");
+    expect(message).toContain(`Valid hooks: ${VALID_HOOKS.join(", ")}`);
   });
 
-  it("rejects a non-string command", async () => {
-    const r = repo({ ".nano-hooks.json": JSON.stringify({ "pre-commit": ["x"] }) });
+  it("points top-level hook names at the hooks section", async () => {
+    const message = await problems({ ".nano-hooks.json": json({ "pre-commit": "x" }) });
 
-    await expect(loadConfig(r.dir)).rejects.toThrow("pre-commit");
+    expect(message).toContain('pre-commit: hooks go under "hooks" (hooks.pre-commit)');
+  });
+
+  it("rejects unknown hook names in preserveUnused", async () => {
+    const message = await problems({ ".nano-hooks.json": json({ preserveUnused: ["pre-comit"] }) });
+
+    expect(message).toContain('preserveUnused[0]: unknown git hook "pre-comit"');
+  });
+
+  it("rejects an empty staged section", async () => {
+    const message = await problems({ ".nano-hooks.json": json({ staged: {} }) });
+
+    expect(message).toContain("staged: must have at least one pattern");
+  });
+
+  it("names the file when the config cannot be parsed", async () => {
+    const message = await problems({ ".nano-hooks.json": "{ not json" });
+
+    expect(message).toMatch(/^Failed to read .*\.nano-hooks\.json: /);
   });
 
   it("lists git's documented hook names", () => {
