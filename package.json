@@ -27,7 +27,7 @@
     "lint": "oxlint",
     "fmt": "oxfmt",
     "test": "vitest run",
-    "prepare": "nano-hooks"
+    "postinstall": "nano-hooks"
   },
   "devDependencies": {
     "nano-hooks": "link:",
