@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { install, uninstall } from "./hooks.js";
+import { log } from "./log.js";
 import { runStaged } from "./staged/index.js";
 
 const USAGE = `Usage: nano-hooks [command]
@@ -25,7 +26,7 @@ function parseStaged(args) {
     if (arg === "-c" || arg === "--config") options.config = args[++i];
     else if (arg === "--allow-empty") options.allowEmpty = true;
     else if (arg === "--bail") options.bail = true;
-    else throw new Error(`unknown option "${arg}"`);
+    else throw new Error(`Unknown option "${arg}".`);
   }
   return options;
 }
@@ -42,16 +43,21 @@ async function main(argv) {
   try {
     if (command === "install") {
       const { installed, removed, skipped } = await install();
-      for (const name of installed) console.log(`nano-hooks: installed ${name}`);
-      for (const name of removed) console.log(`nano-hooks: removed ${name}`);
-      for (const name of skipped)
-        console.warn(`nano-hooks: skipped ${name} (existing hook is not managed by nano-hooks)`);
+      for (const name of installed) log.success(`Installed *${name}*`);
+      for (const name of removed) log.success(`Removed *${name}* (no longer configured)`);
+      for (const name of skipped) {
+        log.warn(`Skipped *${name}* - existing hook is not managed by nano-hooks`);
+      }
+      if (!installed.length && !removed.length && !skipped.length) {
+        log.info("No hooks to install.");
+      }
       return 0;
     }
 
     if (command === "uninstall") {
       const { removed } = await uninstall();
-      for (const name of removed) console.log(`nano-hooks: removed ${name}`);
+      for (const name of removed) log.success(`Removed *${name}*`);
+      if (!removed.length) log.info("No nano-hooks hooks found.");
       return 0;
     }
 
@@ -68,11 +74,12 @@ async function main(argv) {
       return 0;
     }
   } catch (error) {
-    console.error(`nano-hooks: ${error.message.replace(/^nano-hooks: /, "")}`);
+    log.error(error.message);
     return 1;
   }
 
-  process.stderr.write(`nano-hooks: unknown command "${command}"\n\n${USAGE}`);
+  log.error(`Unknown command "${command}".`);
+  process.stderr.write(`\n${USAGE}`);
   return 1;
 }
 

@@ -61,10 +61,10 @@ export async function loadConfig(cwd = process.cwd()) {
 
   for (const [name, command] of Object.entries(hooks)) {
     if (!VALID_HOOKS.includes(name)) {
-      throw new Error(`nano-hooks: unknown git hook "${name}"`);
+      throw new Error(`Unknown git hook "${name}".`);
     }
     if (typeof command !== "string" || !command.trim()) {
-      throw new Error(`nano-hooks: command for hook "${name}" must be a non-empty string`);
+      throw new Error(`Command for hook "${name}" must be a non-empty string.`);
     }
   }
 

@@ -1,6 +1,7 @@
 // Based on nano-staged (MIT) https://github.com/usmanyunusov/nano-staged
 import readline from "readline";
 import { styleText } from "util";
+import { symbols } from "../log.js";
 
 const spinnerMap = new WeakMap();
 const spinnerFrames = ["-", "\\", "|", "/"];
@@ -26,11 +27,11 @@ function getLines(str = "", width = 80) {
 
 function getStateSymbol(task) {
   if (task.state === "done") {
-    return styleText("green", "√");
+    return symbols.done;
   } else if (task.state === "fail") {
-    return styleText("red", "×");
+    return symbols.fail;
   } else if (task.state === "warn") {
-    return styleText("yellow", "↓");
+    return symbols.warn;
   } else if (task.state === "run") {
     let spinner = spinnerMap.get(task);
 
@@ -41,7 +42,7 @@ function getStateSymbol(task) {
 
     return styleText("yellow", spinner());
   } else {
-    return styleText("gray", "*");
+    return symbols.pending;
   }
 }
 
@@ -126,7 +127,8 @@ export function createRenderer(stream, { isTTY = true, quiet = false } = {}) {
 
       if (isTTY) {
         this.write(output, true);
-        lines = getLines(output, stream.columns);
+        // Some terminals (script, bare ptys) report 0 columns; that would make lines infinite.
+        lines = getLines(output, stream.columns || 80);
       } else {
         this.write(output);
       }

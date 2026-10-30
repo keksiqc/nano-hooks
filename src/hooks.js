@@ -28,7 +28,7 @@ function resolveHooksDir(cwd) {
     return resolve(cwd, out.trim());
   } catch (error) {
     if (/not a git repository/i.test(String(error.stderr))) {
-      throw new Error(`nano-hooks: not a git repository: ${cwd}`, { cause: error });
+      throw new Error(`Not a git repository: ${cwd}`, { cause: error });
     }
     throw error;
   }

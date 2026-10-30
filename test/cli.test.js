@@ -99,11 +99,37 @@ describe("nano-hooks install / uninstall", () => {
     const r = repo({ ".nano-hooks.json": JSON.stringify({ "pre-commit": "echo a" }) });
     const hook = join(r.dir, ".git/hooks/pre-commit");
 
-    expect(nano(r).status).toBe(0);
+    const installed = nano(r);
+    expect(installed.status).toBe(0);
+    expect(installed.stderr).toBe("√ Installed pre-commit\n");
+    expect(installed.stdout).toBe("");
     expect(existsSync(hook)).toBe(true);
 
-    expect(nano(r, "uninstall").status).toBe(0);
+    const removed = nano(r, "uninstall");
+    expect(removed.status).toBe(0);
+    expect(removed.stderr).toBe("√ Removed pre-commit\n");
     expect(existsSync(hook)).toBe(false);
+  });
+
+  it("says so when there is nothing to install or uninstall", () => {
+    const r = repo();
+
+    expect(nano(r, "install").stderr).toBe("- No hooks to install.\n");
+    expect(nano(r, "uninstall").stderr).toBe("- No nano-hooks hooks found.\n");
+  });
+
+  it("reports removed and skipped hooks in the same style", () => {
+    const r = repo({ ".nano-hooks.json": JSON.stringify({ "pre-commit": "echo a" }) });
+    nano(r, "install");
+    r.write(".nano-hooks.json", JSON.stringify({ "pre-push": "echo b" }));
+    r.write(".git/hooks/pre-push", "#!/bin/sh\necho mine\n");
+
+    const result = nano(r, "install");
+
+    expect(result.stderr).toBe(
+      "√ Removed pre-commit (no longer configured)\n" +
+        "↓ Skipped pre-push - existing hook is not managed by nano-hooks\n",
+    );
   });
 
   it("install reports an error outside a git repository", () => {
@@ -114,7 +140,7 @@ describe("nano-hooks install / uninstall", () => {
     });
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toMatch(/not a git repository/);
+    expect(result.stderr).toMatch(/^× Not a git repository: /);
   });
 });
 
@@ -123,7 +149,15 @@ describe("nano-hooks usage", () => {
     const result = nano(repo(), "frobnicate");
 
     expect(result.status).toBe(1);
+    expect(result.stderr).toContain('× Unknown command "frobnicate".');
     expect(result.stderr).toContain("Usage: nano-hooks");
+  });
+
+  it("unknown staged option exits 1 with an error line", () => {
+    const result = nano(repo(), "staged", "--nope");
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toBe('× Unknown option "--nope".\n');
   });
 
   it("--help exits 0", () => {

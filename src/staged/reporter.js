@@ -1,6 +1,7 @@
 // Based on nano-staged (MIT) https://github.com/usmanyunusov/nano-staged
 import { styleText } from "util";
 
+import { highlight, symbols } from "../log.js";
 import { NanoStagedError, TaskRunnerError } from "./errors.js";
 
 export function createReporter(stream = process.stderr) {
@@ -11,12 +12,12 @@ export function createReporter(stream = process.stderr) {
   const reporter = {
     error(err) {
       if (err instanceof NanoStagedError) {
-        const msg = err.message.replace(/\*([^*]+)\*/g, styleText("yellow", "$1"));
+        const msg = highlight(err.message);
 
         if (["noFiles", "noMatchingFiles"].includes(err.type)) {
-          print(`${styleText("cyan", `-`)} ${msg}\n`);
+          print(`${symbols.info} ${msg}\n`);
         } else {
-          print(`${styleText("red", "×")} ${styleText("red", msg)}\n`);
+          print(`${symbols.fail} ${styleText("red", msg)}\n`);
         }
       } else if (err instanceof TaskRunnerError) {
         print(`\n${err.message || err}\n`);

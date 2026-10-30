@@ -196,7 +196,7 @@ describe("install", () => {
     const t = createTempDir();
     cleanups.push(t.cleanup);
 
-    await expect(install({ cwd: t.dir })).rejects.toThrow(/not a git repository/);
+    await expect(install({ cwd: t.dir })).rejects.toThrow(/Not a git repository/);
   });
 
   it("works when the project path contains spaces and a quote", async () => {
