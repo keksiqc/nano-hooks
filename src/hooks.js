@@ -59,19 +59,26 @@ function managedHooks(hooksDir) {
 
 /**
  * Write the configured hook scripts and drop stale managed ones.
- * @param {{ cwd?: string }} [options]
+ * @param {{ cwd?: string, config?: string }} [options] `config` is a nano-hooks config file
+ * (relative to `cwd`) to use instead of discovering one.
  * @returns {Promise<{ installed: string[], removed: string[], skipped: string[] }>}
  */
-export async function install({ cwd = process.cwd() } = {}) {
+export async function install({ cwd = process.cwd(), config } = {}) {
   const projectRoot = resolve(cwd);
   const hooksDir = resolveHooksDir(projectRoot);
-  const { hooks: configured, staged, preserveUnused } = await loadConfig(projectRoot);
+  const {
+    hooks: configured,
+    staged,
+    preserveUnused,
+  } = await loadConfig(projectRoot, { file: config });
   const hooks = { ...configured };
 
   if (!hooks["pre-commit"] && staged) {
     const runtime = process.versions.bun ? "bun" : "node";
     // Git runs hooks from the repository root; the staged config may live in a sub-package.
-    hooks["pre-commit"] = `cd ${quote(projectRoot)} && ${runtime} ${quote(CLI_PATH)} staged`;
+    // Hooks run later, so a custom config has to be named explicitly in the command.
+    const flag = config ? ` --config ${quote(resolve(projectRoot, config))}` : "";
+    hooks["pre-commit"] = `cd ${quote(projectRoot)} && ${runtime} ${quote(CLI_PATH)} staged${flag}`;
   }
 
   mkdirSync(hooksDir, { recursive: true });

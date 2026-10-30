@@ -46,6 +46,29 @@ describe("install", () => {
     expect(readFileSync(hookPath(r, "pre-commit"), "utf8")).toMatch(/cli\.js'? staged/);
   });
 
+  it("installs from an explicit config and bakes it into the auto-wired pre-commit", async () => {
+    const r = createRepo({
+      "fmt.js": FMT,
+      "a.js": "one\n",
+      "tools/hooks.json": JSON.stringify({
+        hooks: { "pre-push": "echo push" },
+        staged: { "*.js": "node fmt.js" },
+      }),
+    });
+    cleanups.push(r.cleanup);
+
+    const result = await install({ cwd: r.dir, config: "tools/hooks.json" });
+
+    expect(result.installed.sort()).toEqual(["pre-commit", "pre-push"]);
+    expect(readFileSync(hookPath(r, "pre-commit"), "utf8")).toContain(
+      `--config '${join(r.dir, "tools/hooks.json")}'`,
+    );
+    r.write("a.js", "uno\n");
+    r.git("add", "a.js");
+    commit(r);
+    expect(r.git("show", "HEAD:a.js")).toBe("UNO\n");
+  });
+
   it("does not auto-wire when pre-commit is configured", async () => {
     const r = repo({ "pre-commit": "echo mine" }, undefined, { staged: { "*.js": "echo" } });
 

@@ -21,7 +21,6 @@ const stage = (r, path, content) => {
   r.git("add", path);
 };
 const fmtMap = { "*.js": "node fmt.js" };
-const fmtConfig = JSON.stringify(fmtMap);
 const stagedConfig = JSON.stringify({ staged: fmtMap });
 
 describe("nano-hooks staged", () => {
@@ -80,8 +79,8 @@ describe("nano-hooks staged", () => {
     expect(result.stderr).toContain("pre-commit");
   });
 
-  it("--config points at a specific file", () => {
-    const r = repo({ "a.js": "one\n", "custom.json": fmtConfig });
+  it("--config points at a specific nano-hooks config file", () => {
+    const r = repo({ "a.js": "one\n", "custom.json": stagedConfig });
     stage(r, "a.js", "uno\n");
 
     expect(nano(r, "staged", "--config", "custom.json").status).toBe(0);
@@ -164,6 +163,53 @@ describe("nano-hooks install / uninstall", () => {
 
     expect(result.status).toBe(1);
     expect(result.stderr).toMatch(/^× Not a git repository: /);
+  });
+});
+
+describe("nano-hooks --config", () => {
+  const custom = JSON.stringify({ hooks: { "pre-push": "echo a" } });
+
+  it("install -c reads hooks from that file", () => {
+    const r = repo({ "custom.json": custom });
+
+    const result = nano(r, "install", "-c", "custom.json");
+
+    expect(result.stderr).toBe("√ Installed pre-push\n");
+    expect(existsSync(join(r.dir, ".git/hooks/pre-push"))).toBe(true);
+  });
+
+  it("works before the command too", () => {
+    const r = repo({ "custom.json": custom });
+
+    expect(nano(r, "--config", "custom.json", "install").stderr).toBe("√ Installed pre-push\n");
+  });
+
+  it("uninstall accepts it", () => {
+    const r = repo({ "custom.json": custom });
+    nano(r, "install", "--config", "custom.json");
+
+    expect(nano(r, "uninstall", "--config", "custom.json").stderr).toBe("√ Removed pre-push\n");
+  });
+
+  it("reports a missing config file", () => {
+    const result = nano(repo(), "install", "--config", "nope.json");
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toBe("× Config file nope.json not found.\n");
+  });
+
+  it("needs a path", () => {
+    const result = nano(repo(), "install", "--config");
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toBe('× Option "--config" needs a path.\n');
+  });
+
+  it("rejects staged-only options on other commands", () => {
+    const result = nano(repo(), "install", "--bail");
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toBe('× Option "--bail" only applies to "staged".\n');
   });
 });
 

@@ -122,6 +122,51 @@ describe("loadConfig", () => {
     expect(message).toMatch(/^Failed to read .*\.nano-hooks\.json: /);
   });
 
+  it("loads an explicit file instead of discovering one, relative to cwd", async () => {
+    const r = repo({
+      ".nano-hooks.json": json({ hooks: { "pre-commit": "discovered" } }),
+      "config/custom.json": json({ hooks: { "pre-push": "explicit" } }),
+    });
+
+    const config = await loadConfig(r.dir, { file: "config/custom.json" });
+
+    expect(config.hooks).toEqual({ "pre-push": "explicit" });
+  });
+
+  it("reads the nano-hooks key when the explicit file is a package.json", async () => {
+    const r = repo({
+      "sub/package.json": json({ "nano-hooks": { hooks: { "pre-commit": "x" } } }),
+    });
+
+    expect((await loadConfig(r.dir, { file: "sub/package.json" })).hooks).toEqual({
+      "pre-commit": "x",
+    });
+  });
+
+  it("rejects an explicit file that does not exist", async () => {
+    const r = repo({});
+
+    await expect(loadConfig(r.dir, { file: "nope.json" })).rejects.toThrow(
+      "Config file nope.json not found.",
+    );
+  });
+
+  it("rejects an explicit package.json without a nano-hooks key", async () => {
+    const r = repo({ "package.json": json({ name: "x" }) });
+
+    await expect(loadConfig(r.dir, { file: "package.json" })).rejects.toThrow(
+      'package.json has no "nano-hooks" key.',
+    );
+  });
+
+  it("names the explicit file in validation errors", async () => {
+    const r = repo({ "custom.json": json({ hooks: { "pre-comit": "x" } }) });
+
+    await expect(loadConfig(r.dir, { file: "custom.json" })).rejects.toThrow(
+      "Invalid nano-hooks config in custom.json:",
+    );
+  });
+
   it("lists git's documented hook names", () => {
     expect(VALID_HOOKS).toContain("pre-commit");
     expect(VALID_HOOKS).toContain("commit-msg");

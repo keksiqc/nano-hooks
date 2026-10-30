@@ -53,7 +53,15 @@ Hooks that already exist and were not written by nano-hooks are never overwritte
 | `nano-hooks uninstall`               | Remove the hooks nano-hooks manages.        |
 | `nano-hooks staged`                  | Run the `staged` tasks on the staged files. |
 
-`staged` accepts `-c, --config <path>` (a nano-staged format file to use instead of the `staged` section), `--allow-empty` and `--bail`.
+| Option                | Applies to    | Description                                                 |
+| --------------------- | ------------- | ----------------------------------------------------------- |
+| `-c, --config <path>` | every command | Use this nano-hooks config file instead of looking for one. |
+| `--allow-empty`       | `staged`      | Allow a commit that ends up empty after the tasks ran.      |
+| `--bail`              | `staged`      | Stop after the first failing command.                       |
+
+`--config` takes a `.json`, `.js` or `.mjs` file, or a `package.json` (which is read from its `nano-hooks` key). Relative paths are resolved from the directory you run the command in. `uninstall` removes whatever nano-hooks wrote and does not read the config, so it accepts the option but ignores it.
+
+When you run `nano-hooks install --config <path>`, the generated `pre-commit` hook runs `staged` with that same file. A `pre-commit` command you write yourself, such as `"nano-hooks staged && pnpm test"`, has to pass `--config` itself if it should use the file.
 
 ## Staged files
 

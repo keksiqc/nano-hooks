@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 /** Hook names from githooks(5). */
@@ -46,12 +46,23 @@ const isTask = (value) =>
 
 async function read(path) {
   try {
-    if (path.endsWith(".json")) return JSON.parse(readFileSync(path, "utf8"));
+    if (!/\.[cm]?js$/.test(path)) return JSON.parse(readFileSync(path, "utf8"));
     const mod = await import(pathToFileURL(path).href);
     return mod.default ?? mod;
   } catch (error) {
     throw new Error(`Failed to read ${path}: ${error.message}`, { cause: error });
   }
+}
+
+/** Read an explicitly named config file; a package.json holds it under the nano-hooks key. */
+async function readFile(cwd, file) {
+  const path = resolve(cwd, file);
+  if (!existsSync(path)) throw new Error(`Config file ${file} not found.`);
+  if (basename(path) !== "package.json") return { file, raw: await read(path) };
+
+  const raw = (await read(path))["nano-hooks"];
+  if (raw === undefined) throw new Error(`${file} has no "nano-hooks" key.`);
+  return { file, raw };
 }
 
 /** Find the config in `cwd`: the dotfiles first, then the package.json key. */
@@ -133,17 +144,19 @@ function validate(raw) {
 }
 
 /**
- * Load the nano-hooks config from `cwd` (no upward search). A missing config is an
- * empty one; an invalid config rejects with every problem listed.
+ * Load the nano-hooks config from `cwd` (no upward search), or from `options.file`
+ * (relative to `cwd`) when given. A missing config is an empty one; an invalid config,
+ * or a named file that is missing, rejects.
  * @param {string} [cwd]
+ * @param {{ file?: string }} [options]
  * @returns {Promise<{
  *   hooks: Record<string, string>,
  *   staged?: Record<string, string | string[] | Function>,
  *   preserveUnused: boolean | string[],
  * }>}
  */
-export async function loadConfig(cwd = process.cwd()) {
-  const found = await find(cwd);
+export async function loadConfig(cwd = process.cwd(), { file } = {}) {
+  const found = file ? await readFile(cwd, file) : await find(cwd);
   if (!found) return { hooks: {}, preserveUnused: false };
 
   const problems = validate(found.raw);
