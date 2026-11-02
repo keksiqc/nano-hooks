@@ -28,9 +28,11 @@
     "lint": "oxlint",
     "lint:fix": "oxlint --fix && oxfmt",
     "test": "vitest run",
+    "release": "pnpm run lint:fix && pnpm run test && bumpp",
     "prepare": "nano-hooks"
   },
   "devDependencies": {
+    "bumpp": "^12.3.0",
     "nano-hooks": "link:",
     "oxfmt": "^0.75.0",
     "oxlint": "^1.90.0",
