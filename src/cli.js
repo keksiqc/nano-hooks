@@ -82,7 +82,15 @@ async function main(argv) {
     }
 
     if (command === "install") {
-      const { installed, removed, skipped } = await install({ config: options.config });
+      const { installed, removed, skipped, hooksDir, external } = await install({
+        config: options.config,
+      });
+      if (external) {
+        log.warn(
+          `core.hooksPath points outside .git: ${hooksDir}. Another hooks manager, such as husky, may use it too.`,
+          { markup: false },
+        );
+      }
       for (const name of installed) log.success(`Installed *${name}*`);
       for (const name of removed) log.success(`Removed *${name}* (no longer configured)`);
       for (const name of skipped) {

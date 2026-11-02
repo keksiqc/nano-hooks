@@ -186,6 +186,26 @@ describe("install", () => {
     expect(existsSync(join(r.dir, ".githooks/pre-commit"))).toBe(true);
   });
 
+  it("reports a hooks dir outside .git only when core.hooksPath points there", async () => {
+    const r = repo({ "pre-commit": "echo a" });
+    expect(await install({ cwd: r.dir })).toMatchObject({ external: false });
+
+    r.git("config", "core.hooksPath", ".husky/_");
+    const result = await install({ cwd: r.dir });
+
+    expect(result).toMatchObject({ external: true, hooksDir: join(r.dir, ".husky/_") });
+  });
+
+  it("does not report a hooks dir inside .git, or from a linked worktree", async () => {
+    const r = repo({ "pre-commit": "echo a" });
+    const wt = join(r.dir, "..", "wt");
+    r.git("worktree", "add", "-q", wt);
+
+    expect(await install({ cwd: wt })).toMatchObject({ external: false });
+    r.git("config", "core.hooksPath", ".git/custom-hooks");
+    expect(await install({ cwd: r.dir })).toMatchObject({ external: false });
+  });
+
   it("installs into the shared hooks dir from a linked worktree", async () => {
     const r = repo({ "pre-commit": "echo a" });
     const wt = join(r.dir, "..", "wt");

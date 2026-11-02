@@ -57,6 +57,7 @@ If the configuration has a mistake, nano-hooks rejects it and lists every proble
 - Hook scripts add `node_modules/.bin` to `PATH`, so locally installed tools work without a path.
 - To skip all hooks for one command, set `SKIP_NANO_HOOKS=1`. For example: `SKIP_NANO_HOOKS=1 git commit`.
 - nano-hooks never overwrites or removes a hook that it did not write. The `install` command reports these hooks and continues.
+- If `core.hooksPath` points outside `.git`, `install` writes the hooks to that directory and prints a warning. Tools such as husky set this option, so make sure that only one tool manages the directory.
 - If a hook that nano-hooks wrote earlier is no longer configured, nano-hooks removes it. To keep it, set `preserveUnused` to `true` or list the hook name.
 
 ## CLI

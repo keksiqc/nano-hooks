@@ -1,4 +1,5 @@
-import { normalize, resolve } from "node:path";
+import { realpathSync } from "node:fs";
+import { basename, dirname, isAbsolute, normalize, relative, resolve, sep } from "node:path";
 import { run } from "./exec.js";
 
 const APPLY_ARGS = ["-v", "--whitespace=nowarn", "--recount", "--unidiff-zero"];
@@ -34,6 +35,21 @@ function parseStatus(raw) {
   return entries.filter((entry) => !entry.path.endsWith("/"));
 }
 
+/** Like `realpathSync`, but the path may not exist yet: the existing part is resolved. */
+function realPath(path) {
+  try {
+    return realpathSync(path);
+  } catch {
+    const parent = dirname(path);
+    return parent === path ? path : resolve(realPath(parent), basename(path));
+  }
+}
+
+const isInside = (parent, child) => {
+  const path = relative(parent, child);
+  return path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path);
+};
+
 /**
  * Bind the git helpers to a directory.
  * @param {string} [cwd]
@@ -41,20 +57,31 @@ function parseStatus(raw) {
 export function createGit(cwd = process.cwd()) {
   const exec = (args, options = {}) => run("git", args, { cwd, ...options });
 
+  /**
+   * The directory git looks for hooks in; honours `core.hooksPath` and worktrees.
+   * `external` is true when it lies outside the git directory, which only happens
+   * when `core.hooksPath` points there, as husky does.
+   */
+  const hooksInfo = async () => {
+    try {
+      const out = await exec(["rev-parse", "--git-path", "hooks", "--git-common-dir"]);
+      const [hooks, common] = out.split(/\r?\n/);
+      const dir = resolve(cwd, hooks);
+      return { dir, external: !isInside(realPath(resolve(cwd, common)), realPath(dir)) };
+    } catch (error) {
+      if (/not a git repository/i.test(error.message)) {
+        throw new Error(`Not a git repository: ${cwd}`, { cause: error });
+      }
+      throw error;
+    }
+  };
+
   return {
     exec,
+    hooksInfo,
 
-    /** The directory git looks for hooks in; honours `core.hooksPath` and worktrees. */
     async hooksDir() {
-      try {
-        const out = await exec(["rev-parse", "--git-path", "hooks"]);
-        return resolve(cwd, out.trim());
-      } catch (error) {
-        if (/not a git repository/i.test(error.message)) {
-          throw new Error(`Not a git repository: ${cwd}`, { cause: error });
-        }
-        throw error;
-      }
+      return (await hooksInfo()).dir;
     },
 
     /** The repository root and git directory, or `{ root: null, dot: null }` outside a repository. */

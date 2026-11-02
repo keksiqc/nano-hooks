@@ -60,11 +60,13 @@ function withDefaults(projectRoot, { hooks: configured, staged }, config) {
  * Write the configured hook scripts and drop stale managed ones.
  * @param {{ cwd?: string, config?: string }} [options] `config` is a nano-hooks config file
  * (relative to `cwd`) to use instead of discovering one.
- * @returns {Promise<{ installed: string[], removed: string[], skipped: string[] }>}
+ * @returns {Promise<{ installed: string[], removed: string[], skipped: string[], hooksDir: string, external: boolean }>}
+ * `external` is true when `hooksDir` is outside the git directory because `core.hooksPath`
+ * points there, so another tool such as husky may manage the same directory.
  */
 export async function install({ cwd = process.cwd(), config } = {}) {
   const projectRoot = resolve(cwd);
-  const hooksDir = await createGit(projectRoot).hooksDir();
+  const { dir: hooksDir, external } = await createGit(projectRoot).hooksInfo();
   const loaded = await loadConfig(projectRoot, { file: config });
   const { preserveUnused } = loaded;
   const hooks = withDefaults(projectRoot, loaded, config);
@@ -90,7 +92,7 @@ export async function install({ cwd = process.cwd(), config } = {}) {
   const removed = managedHooks(hooksDir).filter((name) => !keep(name));
   for (const name of removed) unlinkSync(join(hooksDir, name));
 
-  return { installed, removed, skipped };
+  return { installed, removed, skipped, hooksDir, external };
 }
 
 /**

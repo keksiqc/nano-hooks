@@ -200,6 +200,18 @@ describe("nano-hooks install / uninstall", () => {
     expect(existsSync(hook)).toBe(false);
   });
 
+  it("install warns when core.hooksPath points outside .git", () => {
+    const r = repo({ ".nano-hooks.json": hooks({ "pre-commit": "echo hi" }) });
+    expect(nano(r).stderr).toBe("√ Installed pre-commit\n");
+    r.git("config", "core.hooksPath", ".husky/_");
+
+    const result = nano(r);
+
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain("core.hooksPath points outside .git");
+    expect(result.stderr).toContain("√ Installed pre-commit");
+  });
+
   it("install reports an invalid config in the same style", () => {
     const r = repo({ ".nano-hooks.json": JSON.stringify({ hooks: { "pre-comit": "x" } }) });
 
