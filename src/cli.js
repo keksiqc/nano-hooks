@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { loadConfig } from "./config.js";
-import { install, uninstall } from "./hooks.js";
+import { install, runHook, uninstall } from "./hooks.js";
 import { log } from "./log.js";
 import { runStaged } from "./staged.js";
 
@@ -10,10 +10,15 @@ Commands:
   install (default)  Write the configured git hooks
   uninstall          Remove the hooks nano-hooks manages
   staged             Run commands on staged files
+  run <hook> [args]  Run the configured command of one git hook now
 
 Options:
   -c, --config <path>  Path to a nano-hooks config file
   -h, --help           Show this help
+
+Options for run:
+  Arguments after <hook> go to the hook command as $1, $2 and so on, so put
+  --config before <hook>.
 
 Options for staged:
   --allow-empty        Allow empty commits
@@ -22,15 +27,21 @@ Options for staged:
 
 const STAGED_FLAGS = { "--allow-empty": "allowEmpty", "--bail": "bail" };
 
-/** Options may appear before or after the command. */
+/**
+ * Options may appear before or after the command. After `run <hook>`, everything is an
+ * argument for the hook, so its own dashes are not mistaken for options.
+ */
 function parseArgs(argv) {
   const options = {};
   const stagedFlags = [];
   const positional = [];
+  let hookArgs = [];
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === "-c" || arg === "--config") {
+    if (arg === "-h" || arg === "--help") {
+      return { command: "help", options, hookArgs };
+    } else if (arg === "-c" || arg === "--config") {
       const value = argv[++i];
       if (!value || value.startsWith("-")) throw new Error(`Option "${arg}" needs a path.`);
       options.config = value;
@@ -41,26 +52,34 @@ function parseArgs(argv) {
       throw new Error(`Unknown option "${arg}".`);
     } else {
       positional.push(arg);
+      if (positional[0] === "run" && positional.length === 2) {
+        hookArgs = argv.slice(i + 1);
+        break;
+      }
     }
   }
 
   const [command = "install", ...extra] = positional;
-  if (extra.length) throw new Error(`Unexpected argument "${extra[0]}".`);
+  if (command === "run") {
+    if (!extra.length) throw new Error('Command "run" needs a hook name.');
+  } else if (extra.length) {
+    throw new Error(`Unexpected argument "${extra[0]}".`);
+  }
   if (command !== "staged" && stagedFlags.length) {
     throw new Error(`Option "${stagedFlags[0]}" only applies to "staged".`);
   }
-  return { command, options };
+  return { command, options, hook: extra[0], hookArgs };
 }
 
 /** @returns {Promise<number>} the process exit code */
 async function main(argv) {
-  if (argv.includes("-h") || argv.includes("--help")) {
-    process.stdout.write(USAGE);
-    return 0;
-  }
-
   try {
-    const { command, options } = parseArgs(argv);
+    const { command, options, hook, hookArgs } = parseArgs(argv);
+
+    if (command === "help") {
+      process.stdout.write(USAGE);
+      return 0;
+    }
 
     if (command === "install") {
       const { installed, removed, skipped } = await install({ config: options.config });
@@ -82,6 +101,11 @@ async function main(argv) {
       for (const name of removed) log.success(`Removed *${name}*`);
       if (!removed.length) log.info("No nano-hooks hooks found.");
       return 0;
+    }
+
+    if (command === "run") {
+      // The hook command prints its own output and decides the exit code.
+      return await runHook(hook, hookArgs, { config: options.config });
     }
 
     if (command === "staged") {

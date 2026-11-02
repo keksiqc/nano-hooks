@@ -21,6 +21,7 @@ const stage = (r, path, content) => {
   r.git("add", path);
 };
 const fmtMap = { "*.js": "node fmt.js" };
+const hooks = (map) => JSON.stringify({ hooks: map });
 const stagedConfig = JSON.stringify({ staged: fmtMap });
 
 describe("nano-hooks staged", () => {
@@ -103,6 +104,82 @@ describe("nano-hooks staged", () => {
     stage(r, "a.js", "uno\n");
 
     expect(nano(r, "staged", "--bail").status).toBe(0);
+  });
+});
+
+describe("nano-hooks run", () => {
+  it("runs the command of the named hook", () => {
+    const r = repo({
+      ".nano-hooks.json": hooks({ "pre-push": "echo pushed", "pre-commit": "false" }),
+    });
+
+    const result = nano(r, "run", "pre-push");
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe("pushed\n");
+  });
+
+  it("passes the arguments after the hook name to the command", () => {
+    const r = repo({ ".nano-hooks.json": hooks({ "commit-msg": 'echo "$1" "$2"' }) });
+
+    const result = nano(r, "run", "commit-msg", "MSG_FILE", "--flag");
+
+    expect(result.stdout).toBe("MSG_FILE --flag\n");
+  });
+
+  it("exits with the exit code of the command", () => {
+    const r = repo({ ".nano-hooks.json": hooks({ "pre-push": "exit 3" }) });
+
+    expect(nano(r, "run", "pre-push").status).toBe(3);
+  });
+
+  it("runs without the hook being installed and ignores SKIP_NANO_HOOKS", () => {
+    const r = repo({ ".nano-hooks.json": hooks({ "pre-push": "echo ran" }) });
+
+    const result = spawnSync("node", [CLI, "run", "pre-push"], {
+      cwd: r.dir,
+      encoding: "utf8",
+      env: { ...process.env, SKIP_NANO_HOOKS: "1" },
+    });
+
+    expect(result.stdout).toBe("ran\n");
+  });
+
+  it("--config before the hook name picks the config file", () => {
+    const r = repo({ "custom.json": hooks({ "pre-push": "echo custom" }) });
+
+    expect(nano(r, "run", "--config", "custom.json", "pre-push").stdout).toBe("custom\n");
+  });
+
+  it("runs the staged runner for pre-commit when only staged is set", () => {
+    const r = repo({ "a.js": "one\n", ".nano-hooks.json": stagedConfig });
+    stage(r, "a.js", "uno\n");
+
+    expect(nano(r, "run", "pre-commit").status).toBe(0);
+    expect(r.git("show", ":a.js")).toBe("UNO\n");
+  });
+
+  it("needs a hook name", () => {
+    const result = nano(repo(), "run");
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toBe('× Command "run" needs a hook name.\n');
+  });
+
+  it("rejects an unknown hook", () => {
+    const result = nano(repo(), "run", "pre-comit");
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('× Unknown git hook "pre-comit". Valid hooks: ');
+  });
+
+  it("rejects a hook with no configured command", () => {
+    const r = repo({ ".nano-hooks.json": hooks({ "pre-push": "echo a" }) });
+
+    const result = nano(r, "run", "pre-commit");
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toBe('× No command configured for hook "pre-commit".\n');
   });
 });
 

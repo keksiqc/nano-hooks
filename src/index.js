@@ -1,3 +1,3 @@
 export { loadConfig } from "./config.js";
-export { install, uninstall } from "./hooks.js";
+export { install, runHook, uninstall } from "./hooks.js";
 export { runStaged } from "./staged.js";
