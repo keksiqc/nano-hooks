@@ -24,8 +24,9 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "lint": "oxlint",
     "fmt": "oxfmt",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix && oxfmt",
     "test": "vitest run",
     "prepare": "nano-hooks"
   },
