@@ -31,11 +31,11 @@ Configure everything in one place: the `nano-hooks` key in `package.json`, or `.
 }
 ```
 
-| Section          | Description                                                                                                                                           |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hooks`          | Git hook name mapped to the shell command it runs.                                                                                                    |
-| `staged`         | Glob pattern mapped to a command, a list of commands, or (in a JS config) a function returning them. This is the same format as a nano-staged config. |
-| `preserveUnused` | `true`, or a list of hook names, to keep hooks that nano-hooks wrote earlier but that are no longer in `hooks`.                                       |
+| Section          | Description                                                                                                                               |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `hooks`          | Git hook name mapped to the shell command it runs.                                                                                        |
+| `staged`         | Glob pattern mapped to a command, a list of commands, or (in a JS config) a function returning them. This is the format nano-staged uses. |
+| `preserveUnused` | `true`, or a list of hook names, to keep hooks that nano-hooks wrote earlier but that are no longer in `hooks`.                           |
 
 All three sections are optional. A config with a mistake is rejected with every problem listed, naming the file and the key, for example `hooks.pre-comit: unknown git hook`.
 
@@ -65,7 +65,9 @@ When you run `nano-hooks install --config <path>`, the generated `pre-commit` ho
 
 ## Staged files
 
-The `staged` command is based on [nano-staged](https://github.com/usmanyunusov/nano-staged) by Usman Yunusov (MIT). The `staged` section uses nano-staged's own task format, so moving from nano-staged means moving its config under `staged` in the nano-hooks config. nano-hooks does not read `.nano-staged.*` files or the `nano-staged` key. It only supports staged files, so nano-staged's `--diff` and `--unstaged` modes are not included.
+The `staged` command is derived from [nano-staged](https://github.com/usmanyunusov/nano-staged) by Usman Yunusov, and is not affiliated with it. See [Credits](#credits).
+
+The `staged` section uses nano-staged's task format, so to move over from nano-staged, copy your config under `staged` in the nano-hooks config. nano-hooks does not read `.nano-staged.*` files or the `nano-staged` key, and it only runs on staged files: nano-staged's `--diff` and `--unstaged` modes are not included.
 
 Unstaged changes to partially staged files are set aside while the commands run, formatter changes are added back to the commit, and everything is rolled back if a command fails.
 
@@ -91,6 +93,10 @@ To publish the package for the first time, authenticate with npm and run `pnpm p
 After that, add a trusted publisher for the package on npm: provider GitHub Actions, repository `keksiqc/nano-hooks`, workflow `release.yml`. The release workflow publishes through npm's trusted publishing (OIDC, `id-token: write`), so no `NPM_TOKEN` secret is needed.
 
 To release, update the version in `package.json`, commit the change, then push a matching `v*` tag, for example `v0.1.1`. The release workflow (`.github/workflows/release.yml`, also from `sxzz/workflows`) creates a GitHub release with notes generated from the Conventional Commit messages and publishes with `pnpm -r publish --access public --no-git-checks`. It does not run lint or tests, so make sure CI is green on `main` before you tag.
+
+## Credits
+
+The staged-file runner is adapted from [nano-staged](https://github.com/usmanyunusov/nano-staged), © Usman Yunusov, used under the MIT License. It has been restructured and changed to fit nano-hooks, so any bugs in it are nano-hooks' own and should be reported here, not upstream.
 
 ## License
 
