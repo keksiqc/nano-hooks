@@ -62,7 +62,7 @@ function withDefaults(projectRoot, { hooks: configured, staged }, config) {
  * (relative to `cwd`) to use instead of discovering one.
  * @returns {Promise<{ installed: string[], removed: string[], skipped: string[], hooksDir: string, external: boolean }>}
  * `external` is true when `hooksDir` is outside the git directory because `core.hooksPath`
- * points there, so another tool such as husky may manage the same directory.
+ * points there, so another tool such as husky can manage the same directory.
  */
 export async function install({ cwd = process.cwd(), config } = {}) {
   const projectRoot = resolve(cwd);

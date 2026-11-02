@@ -81,7 +81,7 @@ The `uninstall` command does not read the configuration. It accepts `--config` b
 
 If you run `nano-hooks install --config <path>`, the generated `pre-commit` hook runs `staged` with the same file. If you write your own `pre-commit` command, you must pass `--config` in that command.
 
-The `run` command runs the command of the named hook in a `sh` shell. For example, `nano-hooks run pre-push` runs the `pre-push` command from your configuration. Arguments after the hook name go to the command as `$1`, `$2`, and so on, so put `--config` before the hook name. The exit code of the command becomes the exit code of `run`. If you set `staged` but not `pre-commit`, `nano-hooks run pre-commit` runs the staged runner. The `run` command does not need the hook to be installed, and it ignores `SKIP_NANO_HOOKS`.
+The `run` command runs the command of the named hook in a `sh` shell. For example, `nano-hooks run pre-push` runs the `pre-push` command from your configuration. Arguments after the hook name go to the command as `$1`, `$2`, and so on. Put `--config` before the hook name. The exit code of the command becomes the exit code of `run`. If you set `staged` but not `pre-commit`, `nano-hooks run pre-commit` runs the staged runner. The `run` command does not need the hook to be installed, and it ignores `SKIP_NANO_HOOKS`.
 
 ## Staged files
 

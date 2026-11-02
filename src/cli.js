@@ -13,7 +13,7 @@ Commands:
   run <hook> [args]  Run the configured command of one git hook now
 
 Options:
-  -c, --config <path>  Path to a nano-hooks config file
+  -c, --config <path>  Path to a nano-hooks configuration file
   -h, --help           Show this help
 
 Options for run:
@@ -87,14 +87,14 @@ async function main(argv) {
       });
       if (external) {
         log.warn(
-          `core.hooksPath points outside .git: ${hooksDir}. Another hooks manager, such as husky, may use it too.`,
+          `core.hooksPath points outside .git: ${hooksDir}. Another hooks manager, such as husky, can use the same directory.`,
           { markup: false },
         );
       }
       for (const name of installed) log.success(`Installed *${name}*`);
       for (const name of removed) log.success(`Removed *${name}* (no longer configured)`);
       for (const name of skipped) {
-        log.warn(`Skipped *${name}* - existing hook is not managed by nano-hooks`);
+        log.warn(`Skipped *${name}* because nano-hooks did not write the existing hook`);
       }
       if (!installed.length && !removed.length && !skipped.length) {
         log.info("No hooks to install.");

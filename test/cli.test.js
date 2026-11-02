@@ -76,7 +76,7 @@ describe("nano-hooks staged", () => {
     const result = nano(r, "staged");
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("× Invalid nano-hooks config in .nano-hooks.json:");
+    expect(result.stderr).toContain("× Invalid nano-hooks configuration in .nano-hooks.json:");
     expect(result.stderr).toContain("pre-commit");
   });
 
@@ -218,7 +218,7 @@ describe("nano-hooks install / uninstall", () => {
     const result = nano(r, "install");
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toMatch(/^× Invalid nano-hooks config in \.nano-hooks\.json:\n/);
+    expect(result.stderr).toMatch(/^× Invalid nano-hooks configuration in \.nano-hooks\.json:\n/);
     expect(result.stderr).toContain("hooks.pre-comit: unknown git hook");
   });
 
@@ -239,7 +239,7 @@ describe("nano-hooks install / uninstall", () => {
 
     expect(result.stderr).toBe(
       "√ Removed pre-commit (no longer configured)\n" +
-        "↓ Skipped pre-push - existing hook is not managed by nano-hooks\n",
+        "↓ Skipped pre-push because nano-hooks did not write the existing hook\n",
     );
   });
 
@@ -284,7 +284,7 @@ describe("nano-hooks --config", () => {
     const result = nano(repo(), "install", "--config", "nope.json");
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toBe("× Config file nope.json not found.\n");
+    expect(result.stderr).toBe("× Configuration file nope.json not found.\n");
   });
 
   it("needs a path", () => {

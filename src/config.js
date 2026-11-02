@@ -57,7 +57,7 @@ async function read(path) {
 /** Read an explicitly named config file; a package.json holds it under the nano-hooks key. */
 async function readFile(cwd, file) {
   const path = resolve(cwd, file);
-  if (!existsSync(path)) throw new Error(`Config file ${file} not found.`);
+  if (!existsSync(path)) throw new Error(`Configuration file ${file} not found.`);
   if (basename(path) !== "package.json") return { file, raw: await read(path) };
 
   const raw = (await read(path))["nano-hooks"];
@@ -81,7 +81,7 @@ async function find(cwd) {
 
 /** Collect every problem in the config, as lines naming the offending key. */
 function validate(raw) {
-  if (!isObject(raw)) return ["config must be an object"];
+  if (!isObject(raw)) return ["configuration must be an object"];
 
   const problems = [];
   let unknownHook = false;
@@ -162,7 +162,7 @@ export async function loadConfig(cwd = process.cwd(), { file } = {}) {
   const problems = validate(found.raw);
   if (problems.length) {
     const lines = problems.map((problem) => `  ${problem}`);
-    throw new Error([`Invalid nano-hooks config in ${found.file}:`, ...lines].join("\n"));
+    throw new Error([`Invalid nano-hooks configuration in ${found.file}:`, ...lines].join("\n"));
   }
 
   const { hooks = {}, staged, preserveUnused = false } = found.raw;

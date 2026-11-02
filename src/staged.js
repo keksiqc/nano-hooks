@@ -172,7 +172,7 @@ export async function runStaged({
   try {
     if (!config) {
       throw new Error(
-        'No staged tasks configured. Add a "staged" section to your nano-hooks config.',
+        'No staged tasks configured. Add a "staged" section to your nano-hooks configuration.',
       );
     }
 

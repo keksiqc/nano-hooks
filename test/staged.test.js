@@ -92,7 +92,7 @@ describe("runStaged", () => {
     r.git("add", "a.js");
     const config = { "*.js": "node reset.js" };
 
-    expect(await failure(run(r, { config }))).toContain("Prevented an empty git commit");
+    expect(await failure(run(r, { config }))).toContain("The commit would be empty");
 
     r.write("a.js", "y\n");
     r.git("add", "a.js");
@@ -193,7 +193,7 @@ describe("runStaged conflicts and bad configs", () => {
     r.git("add", "a.js");
     r.write("a.js", "uno-x\ntwo\nthree\n");
 
-    expect(await failure(run(r, { config: FMT_JS }))).toContain("Merge conflict");
+    expect(await failure(run(r, { config: FMT_JS }))).toContain("A merge conflict occurred");
     expect(r.read("a.js")).toContain("uno-x");
   });
 

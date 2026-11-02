@@ -30,7 +30,8 @@ export function createGitWorkflow({ allowEmpty = false, dotPath, rootPath }) {
 
       // Before the first commit there is no HEAD to diff against.
       const diff = await git.exec(["diff", "HEAD"]).catch(() => git.exec(["diff", "--cached"]));
-      if (!diff && !allowEmpty) throw new Error("Prevented an empty git commit!");
+      if (!diff && !allowEmpty)
+        throw new Error("The commit would be empty. Use --allow-empty to allow it.");
 
       await git.add(files);
     },
@@ -44,7 +45,9 @@ export function createGitWorkflow({ allowEmpty = false, dotPath, rootPath }) {
         try {
           await git.apply(unstaged, { threeWay: true });
         } catch {
-          throw new Error("Merge conflict! Unstaged changes not restored.");
+          throw new Error(
+            "A merge conflict occurred, so nano-hooks did not restore your unstaged changes.",
+          );
         }
       }
     },

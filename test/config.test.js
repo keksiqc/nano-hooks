@@ -87,7 +87,7 @@ describe("loadConfig", () => {
       }),
     });
 
-    expect(message.split("\n")[0]).toBe("Invalid nano-hooks config in .nano-hooks.json:");
+    expect(message.split("\n")[0]).toBe("Invalid nano-hooks configuration in .nano-hooks.json:");
     expect(message).toContain("hooks.pre-comit: unknown git hook");
     expect(message).toContain("hooks.commit-msg: must be a non-empty command string");
     expect(message).toContain("preserveUnused: must be true, false or a list of hook names");
@@ -147,7 +147,7 @@ describe("loadConfig", () => {
     const r = repo({});
 
     await expect(loadConfig(r.dir, { file: "nope.json" })).rejects.toThrow(
-      "Config file nope.json not found.",
+      "Configuration file nope.json not found.",
     );
   });
 
@@ -163,7 +163,7 @@ describe("loadConfig", () => {
     const r = repo({ "custom.json": json({ hooks: { "pre-comit": "x" } }) });
 
     await expect(loadConfig(r.dir, { file: "custom.json" })).rejects.toThrow(
-      "Invalid nano-hooks config in custom.json:",
+      "Invalid nano-hooks configuration in custom.json:",
     );
   });
 
