@@ -14,16 +14,19 @@ export function highlight(message) {
   return message.replace(/\*([^*]+)\*/g, (_, name) => styleText("yellow", name));
 }
 
-const print = (symbol, message) => process.stderr.write(`${symbol} ${message}\n`);
-const format = (message, { markup = true } = {}) => (markup ? highlight(message) : message);
-
 /**
- * Status lines, written to stderr so stdout stays clean. Pass `{ markup: false }`
- * for text that may contain literal asterisks, such as glob patterns.
+ * Status lines, written to stderr so stdout stays clean. Options:
+ * - `markup: false` for text that may contain literal asterisks, such as glob patterns
+ * - `stream` to write somewhere else than stderr
  */
+function write(symbol, message, { markup = true, stream = process.stderr, color } = {}) {
+  const text = markup ? highlight(message) : message;
+  stream.write(`${symbol} ${color ? styleText(color, text) : text}\n`);
+}
+
 export const log = {
-  success: (message, options) => print(symbols.done, format(message, options)),
-  warn: (message, options) => print(symbols.warn, format(message, options)),
-  info: (message, options) => print(symbols.info, format(message, options)),
-  error: (message, options) => print(symbols.fail, styleText("red", format(message, options))),
+  success: (message, options) => write(symbols.done, message, options),
+  warn: (message, options) => write(symbols.warn, message, options),
+  info: (message, options) => write(symbols.info, message, options),
+  error: (message, options) => write(symbols.fail, message, { ...options, color: "red" }),
 };

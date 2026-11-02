@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import {
   chmodSync,
   existsSync,
@@ -11,27 +10,12 @@ import {
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
+import { createGit } from "./git.js";
 
 const MARKER = "# nano-hooks: managed file, do not edit";
 const CLI_PATH = fileURLToPath(new URL("./cli.js", import.meta.url));
 
 const quote = (value) => `'${value.replaceAll("'", `'\\''`)}'`;
-
-function resolveHooksDir(cwd) {
-  try {
-    const out = execFileSync("git", ["rev-parse", "--git-path", "hooks"], {
-      cwd,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    return resolve(cwd, out.trim());
-  } catch (error) {
-    if (/not a git repository/i.test(String(error.stderr))) {
-      throw new Error(`Not a git repository: ${cwd}`, { cause: error });
-    }
-    throw error;
-  }
-}
 
 function isManaged(path) {
   return readFileSync(path, "utf8").includes(MARKER);
@@ -65,7 +49,7 @@ function managedHooks(hooksDir) {
  */
 export async function install({ cwd = process.cwd(), config } = {}) {
   const projectRoot = resolve(cwd);
-  const hooksDir = resolveHooksDir(projectRoot);
+  const hooksDir = await createGit(projectRoot).hooksDir();
   const {
     hooks: configured,
     staged,
@@ -111,7 +95,7 @@ export async function install({ cwd = process.cwd(), config } = {}) {
  * @returns {Promise<{ removed: string[] }>}
  */
 export async function uninstall({ cwd = process.cwd() } = {}) {
-  const hooksDir = resolveHooksDir(resolve(cwd));
+  const hooksDir = await createGit(resolve(cwd)).hooksDir();
   const removed = managedHooks(hooksDir);
   for (const name of removed) unlinkSync(join(hooksDir, name));
   return { removed };

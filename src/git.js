@@ -1,0 +1,121 @@
+import { normalize, resolve } from "node:path";
+import { run } from "./exec.js";
+
+const APPLY_ARGS = ["-v", "--whitespace=nowarn", "--recount", "--unidiff-zero"];
+const DIFF_ARGS = [
+  "--binary",
+  "--unified=0",
+  "--no-color",
+  "--no-ext-diff",
+  "--src-prefix=a/",
+  "--dst-prefix=b/",
+  "--patch",
+  "--submodule=short",
+];
+
+/**
+ * Parse `git status -z` output into `{ x, y, path }` entries, where `x` and `y` are the
+ * index and worktree status letters and `path` is the current path.
+ */
+function parseStatus(raw) {
+  const fields = raw.split("\0");
+  const entries = [];
+
+  for (let i = 0; i < fields.length; i++) {
+    const field = fields[i];
+    if (field.length < 4) continue;
+
+    const [x, y] = field;
+    // Renames and copies are followed by a field with the original path.
+    if (x === "R" || x === "C") i++;
+    entries.push({ x, y, path: field.slice(3) });
+  }
+
+  return entries.filter((entry) => !entry.path.endsWith("/"));
+}
+
+/**
+ * Bind the git helpers to a directory.
+ * @param {string} [cwd]
+ */
+export function createGit(cwd = process.cwd()) {
+  const exec = (args, options = {}) => run("git", args, { cwd, ...options });
+
+  return {
+    exec,
+
+    /** The directory git looks for hooks in; honours `core.hooksPath` and worktrees. */
+    async hooksDir() {
+      try {
+        const out = await exec(["rev-parse", "--git-path", "hooks"]);
+        return resolve(cwd, out.trim());
+      } catch (error) {
+        if (/not a git repository/i.test(error.message)) {
+          throw new Error(`Not a git repository: ${cwd}`, { cause: error });
+        }
+        throw error;
+      }
+    },
+
+    /** The repository root and git directory, or `{ root: null, dot: null }` outside a repository. */
+    async getGitPaths() {
+      // Git sets these in some hooks; they would point later commands at the wrong place.
+      delete process.env.GIT_DIR;
+      delete process.env.GIT_WORK_TREE;
+
+      try {
+        const out = await exec(["rev-parse", "--show-toplevel", "--absolute-git-dir"]);
+        const [root, dot] = out.split(/\r?\n/);
+        return root && dot
+          ? { root: normalize(root), dot: normalize(dot) }
+          : { root: null, dot: null };
+      } catch {
+        return { root: null, dot: null };
+      }
+    },
+
+    async diff(output, files = []) {
+      await exec([
+        "diff",
+        ...DIFF_ARGS,
+        "--output",
+        output,
+        ...(files.length ? ["--", ...files] : []),
+      ]);
+    },
+
+    async apply(patch, { threeWay = false } = {}) {
+      await exec(["apply", ...APPLY_ARGS, ...(threeWay ? ["-3"] : []), patch]);
+    },
+
+    async add(paths) {
+      if (paths.length) await exec(["add", "-A", "--", ...paths]);
+    },
+
+    async checkout(paths) {
+      if (paths.length) await exec(["checkout", "-q", "--force", "--", ...paths]);
+    },
+
+    /**
+     * The staged files, relative to the repository root. `working` lists every staged file
+     * that still exists, `changed` those that also have unstaged modifications and
+     * `deleted` those deleted from the worktree but not from the index.
+     */
+    async stagedFiles() {
+      const raw = await exec(["status", "-z", "-u"], { env: { GIT_OPTIONAL_LOCKS: "0" } });
+      const working = new Set();
+      const changed = [];
+      const deleted = [];
+
+      for (const { x, y, path } of parseStatus(raw)) {
+        if (!"AMRC".includes(x) || working.has(path)) continue;
+
+        working.add(path);
+        if ("ACMR".includes(y)) changed.push(path);
+        else if (y === "D") deleted.push(path);
+      }
+
+      return { working: [...working], changed, deleted };
+    },
+  };
+}

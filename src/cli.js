@@ -2,7 +2,7 @@
 import { loadConfig } from "./config.js";
 import { install, uninstall } from "./hooks.js";
 import { log } from "./log.js";
-import { runStaged } from "./staged/index.js";
+import { runStaged } from "./staged.js";
 
 const USAGE = `Usage: nano-hooks [command] [options]
 
