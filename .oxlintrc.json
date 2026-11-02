@@ -6,7 +6,9 @@
     "suspicious": "warn",
     "perf": "warn"
   },
-  "rules": {},
+  "rules": {
+    "eslint/no-await-in-loop": "off"
+  },
   "env": {
     "builtin": true
   }
