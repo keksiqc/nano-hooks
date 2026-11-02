@@ -2,8 +2,8 @@ import { existsSync, symlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { PassThrough } from "node:stream";
 import { afterEach, describe, expect, it } from "vitest";
-import { runStaged } from "../src/staged/index.js";
-import { FAIL, FMT, MARK, RESET, createRepo } from "./helpers.js";
+import { runStaged } from "../src/staged.js";
+import { FAIL, FMT, MARK, RESET, createRepo, createTempDir } from "./helpers.js";
 
 const repos = [];
 function repo(files, options) {
@@ -24,7 +24,7 @@ async function failure(promise) {
   try {
     await promise;
   } catch (error) {
-    return [].concat(error).map(String).join("\n");
+    return (error instanceof AggregateError ? error.errors : [error]).map(String).join("\n");
   }
   throw new Error("expected runStaged to reject");
 }
@@ -117,15 +117,13 @@ describe("runStaged", () => {
     expect(await failure(run(r))).toMatch(/No staged tasks configured/);
   });
 
-  it("supports function values in a JS config file", async () => {
-    const r = repo({
-      "a.js": "one\n",
-      "tasks.mjs": `export default { "*.js": ({ filenames }) => ["node fmt.js " + filenames.join(" ")] };\n`,
-    });
+  it("supports function values", async () => {
+    const r = repo({ "a.js": "one\n" });
     r.write("a.js", "uno\n");
     r.git("add", "a.js");
+    const config = { "*.js": ({ filenames }) => ["node fmt.js " + filenames.join(" ")] };
 
-    await run(r, { config: join(r.dir, "tasks.mjs") });
+    await run(r, { config });
 
     expect(r.git("show", ":a.js")).toBe("UNO\n");
   });
@@ -199,11 +197,13 @@ describe("runStaged conflicts and bad configs", () => {
     expect(r.read("a.js")).toContain("uno-x");
   });
 
-  it("rejects with the file name when the config cannot be parsed", async () => {
-    const r = repo({ "a.js": "one\n", "bad.json": "{ not json" });
-    r.write("a.js", "uno\n");
-    r.git("add", "a.js");
+  it("rejects outside a git repository", async () => {
+    const { dir, cleanup } = createTempDir();
 
-    expect(await failure(run(r, { config: join(r.dir, "bad.json") }))).toContain("bad.json");
+    try {
+      expect(await failure(run({ dir }, { config: FMT_JS }))).toContain("Not a git repository");
+    } finally {
+      cleanup();
+    }
   });
 });

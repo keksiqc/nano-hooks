@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createRenderer } from "../src/staged/renderer.js";
+import { createRenderer } from "../src/renderer.js";
 
 describe("createRenderer", () => {
   it("does not loop forever on a terminal that reports width 0", () => {
