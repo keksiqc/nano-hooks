@@ -1,9 +1,27 @@
 # nano-hooks
 
-[![npm version][npm-version-src]][npm-version-href]
-[![npm downloads][npm-downloads-src]][npm-downloads-href]
-[![bundle][bundle-src]][bundle-href]
-[![License][license-src]][license-href]
+<a href="https://npmx.dev/package/nano-hooks">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://www.shieldcn.dev/npm/nano-hooks.svg?variant=secondary&amp;size=sm&amp;mode=dark">
+    <img alt="npm Version" src="https://www.shieldcn.dev/npm/nano-hooks.svg?variant=secondary&amp;size=sm&amp;mode=light">
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://www.shieldcn.dev/npm/dw/nano-hooks.svg?variant=secondary&size=sm&amp;mode=dark">
+    <img alt="npm Weekly Downloads" src="https://www.shieldcn.dev/npm/dw/nano-hooks.svg?variant=secondary&size=sm&amp;mode=light">
+  </picture>
+</a>
+<a href="https://github.com/keksiqc/nano-hooks/actions/workflows/ci.yml">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://www.shieldcn.dev/github/ci/keksiqc/nano-hooks.svg?variant=secondary&amp;size=sm&amp;mode=dark">
+    <img alt="CI" src="https://www.shieldcn.dev/github/ci/keksiqc/nano-hooks.svg?variant=secondary&amp;size=sm&amp;mode=light">
+  </picture>
+</a>
+<a href="https://github.com/keksiqc/nano-hooks/blob/main/LICENSE">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://www.shieldcn.dev/github/license/keksiqc/nano-hooks.svg?variant=secondary&amp;size=sm&amp;mode=dark">
+    <img alt="License" src="https://www.shieldcn.dev/github/license/keksiqc/nano-hooks.svg?variant=secondary&amp;size=sm&amp;mode=light">
+  </picture>
+</a>
 
 A tiny Git hooks manager with zero dependencies and a built-in staged-file runner.
 
@@ -104,10 +122,7 @@ The staged-file runner is adapted from [nano-staged](https://github.com/usmanyun
 
 <!-- Badges -->
 
-[npm-version-src]: https://img.shields.io/npm/v/nano-hooks?style=for-the-badge
-[npm-version-href]: https://npmx.dev/package/nano-hooks
-[npm-downloads-src]: https://img.shields.io/npm/dm/nano-hooks?style=for-the-badge
-[npm-downloads-href]: https://npmx.dev/package/nano-hooks
+[npm-href]: https://npmx.dev/package/nano-hooks
 [bundle-src]: https://img.shields.io/bundlephobia/minzip/nano-hooks?style=for-the-badge&label=minzip
 [bundle-href]: https://bundlephobia.com/result?p=nano-hooks
 [license-src]: https://img.shields.io/github/license/keksiqc/nano-hooks.svg?style=for-the-badge
