@@ -34,7 +34,7 @@ export const VALID_HOOKS = [
   "post-index-change",
 ];
 
-const SECTIONS = ["hooks", "staged", "preserveUnused"];
+const SECTIONS = new Set(["hooks", "staged", "preserveUnused"]);
 const FILES = [".nano-hooks.js", ".nano-hooks.mjs", ".nano-hooks.json"];
 
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -67,9 +67,9 @@ async function readFile(cwd, file) {
 
 /** Find the config in `cwd`: the dotfiles first, then the package.json key. */
 async function find(cwd) {
-  for (const name of FILES) {
-    const path = join(cwd, name);
-    if (existsSync(path)) return { file: name, raw: await read(path) };
+  const name = FILES.find((file) => existsSync(join(cwd, file)));
+  if (name) {
+    return { file: name, raw: await read(join(cwd, name)) };
   }
 
   const pkg = join(cwd, "package.json");
@@ -87,7 +87,7 @@ function validate(raw) {
   let unknownHook = false;
 
   for (const key of Object.keys(raw)) {
-    if (SECTIONS.includes(key)) continue;
+    if (SECTIONS.has(key)) continue;
     problems.push(
       VALID_HOOKS.includes(key)
         ? `${key}: hooks go under "hooks" (hooks.${key})`

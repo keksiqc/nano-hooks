@@ -162,7 +162,8 @@ async function tryGetExecutablePath(filePath, extensions) {
         try {
           const directory = path.dirname(filePath);
           const upperName = path.basename(filePath).toUpperCase();
-          for (const actualName of await fs.readdir(directory)) {
+          const actualNames = await fs.readdir(directory);
+          for (const actualName of actualNames) {
             if (upperName === actualName.toUpperCase()) {
               filePath = path.join(directory, actualName);
               break;

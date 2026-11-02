@@ -28,14 +28,19 @@ describe("install", () => {
 
     const result = await install({ cwd: r.dir });
 
-    expect(result.installed.sort()).toEqual(["commit-msg", "pre-commit"]);
+    expect(result.installed.toSorted()).toEqual(["commit-msg", "pre-commit"]);
     const script = readFileSync(hookPath(r, "pre-commit"), "utf8");
     expect(script.startsWith("#!/bin/sh\n# nano-hooks: managed file")).toBe(true);
     expect(script).toContain("echo hello");
-    // Windows has no executable bit; git for Windows runs the script through sh anyway.
-    if (process.platform !== "win32") {
-      expect(statSync(hookPath(r, "pre-commit")).mode & 0o111).toBe(0o111);
-    }
+  });
+
+  // Windows has no executable bit; git for Windows runs the script through sh anyway.
+  it.skipIf(process.platform === "win32")("makes managed scripts executable", async () => {
+    const r = repo({ "pre-commit": "echo hello" });
+
+    await install({ cwd: r.dir });
+
+    expect(statSync(hookPath(r, "pre-commit")).mode & 0o111).toBe(0o111);
   });
 
   it("auto-wires pre-commit to the staged runner when a staged config exists", async () => {
@@ -59,7 +64,7 @@ describe("install", () => {
 
     const result = await install({ cwd: r.dir, config: "tools/hooks.json" });
 
-    expect(result.installed.sort()).toEqual(["pre-commit", "pre-push"]);
+    expect(result.installed.toSorted()).toEqual(["pre-commit", "pre-push"]);
     expect(readFileSync(hookPath(r, "pre-commit"), "utf8")).toContain(
       `--config '${join(r.dir, "tools/hooks.json")}'`,
     );
