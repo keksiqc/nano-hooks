@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { init } from "../src/init.js";
+import { init } from "../src/commands/init.js";
 import { createRepo, createTempDir } from "./helpers.js";
 
 const CLI = fileURLToPath(new URL("../src/cli.js", import.meta.url));

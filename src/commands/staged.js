@@ -1,10 +1,11 @@
 // The staged-file runner is based on nano-staged (MIT), see LICENSE.
 import { realpathSync } from "node:fs";
-import { createGitWorkflow } from "./backup.js";
-import { createGit } from "./git.js";
-import { log } from "./log.js";
-import { createRenderer } from "./renderer.js";
-import { CommandError, createCommandGroups, runCommandGroups } from "./tasks.js";
+import { loadConfig } from "../config.js";
+import { createGitWorkflow } from "../backup.js";
+import { createGit } from "../git.js";
+import { log } from "../log.js";
+import { createRenderer } from "../renderer.js";
+import { CommandError, createCommandGroups, runCommandGroups } from "../tasks.js";
 
 /**
  * Run the configured commands on the staged files, keeping the working tree safe: unstaged
@@ -217,3 +218,46 @@ export async function runStaged({
     throw error;
   }
 }
+
+/** @type {import("./index.js").Command} */
+export const command = {
+  name: "staged",
+  description: "Run commands on staged files",
+  flags: [
+    {
+      flags: ["--allow-empty"],
+      name: "allowEmpty",
+      value: true,
+      description: "Allow empty commits",
+    },
+    {
+      flags: ["--bail"],
+      name: "bail",
+      value: true,
+      description: "Stop after the first failing command",
+    },
+    {
+      flags: ["--no-concurrent"],
+      name: "concurrent",
+      value: false,
+      description: "Run the patterns one after the other",
+    },
+  ],
+  note: 'These options can also be set in the "options" section of the configuration.\nA command line option wins over the configuration.',
+  async run({ options }) {
+    const { staged: tasks, options: configured } = await loadConfig(process.cwd(), {
+      file: options.config,
+    });
+    // A command line option wins over the configuration.
+    const { allowEmpty, bail, concurrent } = { ...configured, ...options };
+    // Let rollback finish if the user interrupts a running commit.
+    process.on("SIGINT", () => {});
+    try {
+      await runStaged({ config: tasks, allowEmpty, bail, concurrent });
+    } catch {
+      // runStaged has already reported the errors.
+      return 1;
+    }
+    return 0;
+  },
+};

@@ -2,7 +2,8 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { install, uninstall } from "../src/hooks.js";
+import { install } from "../src/commands/install.js";
+import { uninstall } from "../src/commands/uninstall.js";
 import { FMT, createRepo, createTempDir, linkCli } from "./helpers.js";
 
 const cleanups = [];

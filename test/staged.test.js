@@ -2,7 +2,7 @@ import { existsSync, symlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { PassThrough } from "node:stream";
 import { afterEach, describe, expect, it } from "vitest";
-import { runStaged } from "../src/staged.js";
+import { runStaged } from "../src/commands/staged.js";
 import { FAIL, FMT, MARK, RESET, createRepo, createTempDir } from "./helpers.js";
 
 const repos = [];

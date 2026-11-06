@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { findConfig } from "./config.js";
+import { findConfig } from "../config.js";
+import { log } from "../log.js";
+import { installHooks } from "./install.js";
 
 const LOCKFILES = [
   ["pnpm-lock.yaml", "pnpm"],
@@ -60,3 +62,22 @@ export async function init({ cwd = process.cwd(), command } = {}) {
 
   return { command: hook, prepare };
 }
+
+/** @type {import("./index.js").Command} */
+export const command = {
+  name: "init",
+  usage: "init [command]",
+  description:
+    'Add a starter configuration to package.json (default command:\n"<package manager> run lint") and install the hooks',
+  // Everything after `init` is the hook command, so its dashes are not mistaken for options.
+  passthrough: 0,
+  async run({ args }) {
+    const { command: hook, prepare } = await init({ command: args.join(" ") });
+    log.success(`Added the *nano-hooks* key to package.json`);
+    log.info(`pre-commit runs: ${hook}`, { markup: false });
+    if (prepare !== "kept") {
+      log.info(`The prepare script ${prepare === "added" ? "is" : "now ends with"} nano-hooks.`);
+    }
+    return installHooks();
+  },
+};
