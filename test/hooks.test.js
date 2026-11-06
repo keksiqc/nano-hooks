@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { install } from "../src/commands/install.js";
 import { runHook } from "../src/commands/run.js";
-import { withDefaultHooks } from "../src/commands/staged.js";
 import { uninstall } from "../src/commands/uninstall.js";
+import { withDefaultHooks } from "../src/hooks.js";
 import { FMT, createRepo, createTempDir, linkCli } from "./helpers.js";
 
 const cleanups = [];
@@ -343,26 +343,28 @@ describe("uninstall", () => {
 });
 
 describe("default pre-commit hook", () => {
-  it("runs staged, with a quoted config file and the directory prefix when needed", () => {
+  it("runs staged, with a quoted config file and the directory prefix when needed", async () => {
     const staged = { "*.js": "echo" };
 
-    expect(withDefaultHooks({ staged })).toEqual({ "pre-commit": "nano-hooks staged" });
-    expect(withDefaultHooks({ staged }, "it's.json", "cd 'a b' && ")).toEqual({
+    expect(await withDefaultHooks({ staged })).toEqual({ "pre-commit": "nano-hooks staged" });
+    expect(await withDefaultHooks({ staged }, "it's.json", "cd 'a b' && ")).toEqual({
       "pre-commit": "cd 'a b' && nano-hooks staged --config 'it'\\''s.json'",
     });
   });
 
-  it("keeps the configured hooks and an explicit pre-commit", () => {
+  it("keeps the configured hooks and an explicit pre-commit", async () => {
     const staged = { "*.js": "echo" };
 
-    expect(withDefaultHooks({ hooks: { "pre-push": "echo push" }, staged })).toEqual({
+    expect(await withDefaultHooks({ hooks: { "pre-push": "echo push" }, staged })).toEqual({
       "pre-push": "echo push",
       "pre-commit": "nano-hooks staged",
     });
-    expect(withDefaultHooks({ hooks: { "pre-commit": "echo mine" }, staged }, "x.json")).toEqual({
+    expect(
+      await withDefaultHooks({ hooks: { "pre-commit": "echo mine" }, staged }, "x.json"),
+    ).toEqual({
       "pre-commit": "echo mine",
     });
-    expect(withDefaultHooks({ hooks: { "pre-push": "echo push" } })).toEqual({
+    expect(await withDefaultHooks({ hooks: { "pre-push": "echo push" } })).toEqual({
       "pre-push": "echo push",
     });
   });

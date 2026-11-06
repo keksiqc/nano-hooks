@@ -19,6 +19,9 @@ import { command as uninstall } from "./uninstall.js";
  * @property {string} description one or more lines for the help
  * @property {boolean} [default] runs when no command is given
  * @property {Flag[]} [flags] options that only this command accepts
+ * @property {(loaded: object, context: {config?: string, cd: string}) => Record<string, string | string[]>} [defaultHooks]
+ *   the hooks this command adds when the configuration does not set them, such as the
+ *   default `pre-commit`. `cd` is a prefix for commands that run from another directory.
  * @property {string} [note] extra lines for the help
  * @property {number} [passthrough] accepts arguments. Option parsing stops after this many
  *   arguments, and the rest go to the command untouched.

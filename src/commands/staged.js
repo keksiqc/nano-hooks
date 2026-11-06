@@ -150,27 +150,6 @@ export async function runStaged({
   }
 }
 
-/**
- * The configured hook commands, plus the default `pre-commit` that runs this command when
- * `staged` is configured and `pre-commit` is not. Installed hooks and `run` share this.
- * `cd` is a prefix for that default command, for hooks that start in another directory.
- * The `nano-hooks` command comes from `node_modules/.bin`, which the hook puts on PATH.
- * The staged config may live in a sub-package, and a custom config has to be named
- * explicitly because hooks run later, from another directory.
- * @param {{ hooks?: Record<string, string | string[]>, staged?: object }} loaded
- * @param {string} [config] the config file of the project, if it is not discovered
- * @param {string} [cd]
- */
-export function withDefaultHooks({ hooks: configured, staged }, config, cd = "") {
-  const hooks = { ...configured };
-
-  if (!hooks["pre-commit"] && staged) {
-    const flag = config ? ` --config ${quote(config)}` : "";
-    hooks["pre-commit"] = `${cd}nano-hooks staged${flag}`;
-  }
-  return hooks;
-}
-
 /** @type {import("./index.js").Command} */
 export const command = {
   name: "staged",
@@ -195,6 +174,15 @@ export const command = {
       description: "Run the patterns one after the other",
     },
   ],
+  // Run on the staged files in the default pre-commit hook when `staged` is configured.
+  // The `nano-hooks` command comes from `node_modules/.bin`, which the hook puts on PATH.
+  // The staged config may live in a sub-package, and a custom config has to be named
+  // explicitly because hooks run later, from another directory.
+  defaultHooks({ staged }, { config, cd }) {
+    if (!staged) return {};
+    const flag = config ? ` --config ${quote(config)}` : "";
+    return { "pre-commit": `${cd}nano-hooks staged${flag}` };
+  },
   note: 'These options can also be set in the "options" section of the configuration.\nA command line option wins over the configuration.',
   async run({ options }) {
     const { staged: tasks, options: configured } = await loadConfig(process.cwd(), {
