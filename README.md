@@ -92,6 +92,8 @@ The `staged` command comes from [nano-staged](https://github.com/usmanyunusov/na
 
 To move from nano-staged, copy your nano-staged configuration into the `staged` section. nano-hooks does not read `.nano-staged.*` files or the `nano-staged` key. It runs only on staged files, so it does not include the `--diff` and `--unstaged` modes of nano-staged.
 
+If the file list is too long for one command line, nano-hooks runs the command several times, each time on a part of the files. A function task gets all files in one call and must split them itself.
+
 When the commands run, nano-hooks sets aside the unstaged changes in partially staged files. It adds formatter changes back to the commit. If a command fails, it rolls back all changes.
 
 ## Development

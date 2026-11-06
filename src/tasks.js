@@ -9,6 +9,12 @@ const TASK_TYPE = "staged";
 /** Matches a bare word, a quoted string, or a word with quoted parts, like a shell would. */
 const ARGUMENT = /([^\s'"]([^\s'"]*(['"])([^\3]*?)\3)+[^\s'"]*)|[^\s'"]+|(['"])([^\5]*?)\5/g;
 
+/**
+ * The most characters that the files of one command call can use. These are half of the
+ * argument limits of the operating systems, which leaves room for the environment.
+ */
+const MAX_ARG_LENGTH = ({ darwin: 262_144, win32: 8191 }[process.platform] ?? 131_072) / 2;
+
 /** Thrown when one or more configured commands failed; the message is ready to print. */
 export class CommandError extends Error {
   name = "CommandError";
@@ -20,6 +26,34 @@ export function splitCommand(command) {
 }
 
 /**
+ * Split `files` into chunks so that the command line of each call stays below `maxLength`.
+ * Each chunk has at least one file. `usedLength` is the length of the command and its arguments.
+ * @param {string[]} files
+ * @param {number} usedLength
+ * @param {number} [maxLength]
+ * @returns {string[][]}
+ */
+export function chunkFiles(files, usedLength, maxLength = MAX_ARG_LENGTH) {
+  const chunks = [];
+  let chunk = [];
+  let length = usedLength;
+
+  for (const file of files) {
+    // One more character for the space between arguments.
+    if (chunk.length && length + file.length + 1 > maxLength) {
+      chunks.push(chunk);
+      chunk = [];
+      length = usedLength;
+    }
+    chunk.push(file);
+    length += file.length + 1;
+  }
+  if (chunk.length) chunks.push(chunk);
+
+  return chunks;
+}
+
+/**
  * Build one task group per configured glob pattern, holding a task per command.
  * Groups without matching files get no tasks.
  * @param {object} options
@@ -27,8 +61,16 @@ export function splitCommand(command) {
  * @param {string[]} options.files staged files, relative to `rootPath`
  * @param {string} options.cwd only files below this directory are matched
  * @param {string} options.rootPath the repository root, where commands run
+ * @param {number} [options.maxArgLength] the most characters for the files of one call;
+ * a command that would exceed it runs several times on parts of the files
  */
-export async function createCommandGroups({ config, files, cwd, rootPath }) {
+export async function createCommandGroups({
+  config,
+  files,
+  cwd,
+  rootPath,
+  maxArgLength = MAX_ARG_LENGTH,
+}) {
   // File paths as seen from cwd, with forward slashes.
   const relativeFiles = files.map((file) =>
     normalize(relative(cwd, resolve(rootPath, file))).replaceAll("\\", "/"),
@@ -62,9 +104,16 @@ export async function createCommandGroups({ config, files, cwd, rootPath }) {
         title: line,
         pattern,
         parent: group,
-        // A function has already chosen the arguments; a plain command gets the files.
-        run: (signal) =>
-          run(command, isFunction ? args : [...args, ...matched], { cwd: rootPath, signal }),
+        // A function has already chosen the arguments; a plain command gets the files, as
+        // many per call as fit in one command line.
+        run: async (signal) => {
+          if (isFunction) return run(command, args, { cwd: rootPath, signal });
+
+          const used = [command, ...args].join(" ").length;
+          for (const chunk of chunkFiles(matched, used, maxArgLength)) {
+            await run(command, [...args, ...chunk], { cwd: rootPath, signal });
+          }
+        },
       };
     });
     groups.push(group);
