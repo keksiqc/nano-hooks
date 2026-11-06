@@ -30,7 +30,10 @@ nano-hooks requires Node 22, or Node 24 and later.
          "*.{js,ts}": "eslint --fix",
          "*.css": ["prettier --write"]
        },
-       "preserveUnused": ["pre-push"]
+       "options": {
+         "concurrent": false,
+         "preserveUnused": ["pre-push"]
+       }
      }
    }
    ```
@@ -41,13 +44,25 @@ nano-hooks requires Node 22, or Node 24 and later.
 
 nano-hooks reads its configuration from the first of these places that exists, in this order: `.nano-hooks.json`, `.nano-hooks.js`, `.nano-hooks.mjs`, and the `nano-hooks` key in `package.json`. A dedicated file wins over `package.json`. nano-hooks looks only in the directory where you run it, unless you set `--config`.
 
-All three sections are optional:
+All sections are optional:
 
 | Section          | Description                                                                                                                           |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `hooks`          | Maps a Git hook name to the shell command that it runs.                                                                               |
 | `staged`         | Maps a glob pattern to a command, a list of commands, or (in a JS file) a function that returns them. This is the nano-staged format. |
-| `preserveUnused` | `true`, or a list of hook names. Keeps hooks that nano-hooks wrote earlier but that are no longer in `hooks`.                         |
+| `options`        | Settings for nano-hooks. See the table below.                                                                                         |
+| `preserveUnused` | The older form of `options.preserveUnused`. nano-hooks uses it only when `options.preserveUnused` is not set.                         |
+
+The `options` section accepts these keys:
+
+| Option           | Default | Description                                                                                                   |
+| ---------------- | ------- | ------------------------------------------------------------------------------------------------------------- |
+| `concurrent`     | `true`  | Run the `staged` patterns side by side. If two patterns can match the same file, set it to `false`.           |
+| `bail`           | `false` | Stop the `staged` run after the first command that fails. Same as `--bail`.                                   |
+| `allowEmpty`     | `false` | Allow a commit that is empty after the `staged` tasks ran. Same as `--allow-empty`.                           |
+| `preserveUnused` | `false` | `true`, or a list of hook names. Keeps hooks that nano-hooks wrote earlier but that are no longer in `hooks`. |
+
+A command line option wins over the same option in the configuration.
 
 If the configuration has a mistake, nano-hooks rejects it and lists every problem with the file name and the key. For example: `hooks.pre-comit: unknown git hook`.
 
@@ -60,7 +75,7 @@ If the configuration has a mistake, nano-hooks rejects it and lists every proble
 - If the directory is not a git repository, `install` prints a warning and exits with code 0. A `prepare` script then does not fail an install that has no `.git` directory.
 - nano-hooks never overwrites or removes a hook that it did not write. The `install` command reports these hooks and continues.
 - If `core.hooksPath` points outside `.git`, `install` writes the hooks to that directory and prints a warning. Tools such as husky set this option, so make sure that only one tool manages the directory.
-- If a hook that nano-hooks wrote earlier is no longer configured, nano-hooks removes it. To keep it, set `preserveUnused` to `true` or list the hook name.
+- If a hook that nano-hooks wrote earlier is no longer configured, nano-hooks removes it. To keep it, set `options.preserveUnused` to `true` or list the hook name.
 
 ## CLI
 
@@ -77,6 +92,7 @@ If the configuration has a mistake, nano-hooks rejects it and lists every proble
 | `-v, --version`       | Every command | Print the version and exit.                               |
 | `--allow-empty`       | `staged`      | Allow a commit that is empty after the tasks ran.         |
 | `--bail`              | `staged`      | Stop after the first command that fails.                  |
+| `--no-concurrent`     | `staged`      | Run the patterns one after the other.                     |
 
 The `--config` option accepts a `.json`, `.js`, or `.mjs` file, or a `package.json` file. For a `package.json` file, nano-hooks reads the `nano-hooks` key. nano-hooks resolves a relative path from the directory where you run the command.
 

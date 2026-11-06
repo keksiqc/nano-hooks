@@ -24,6 +24,22 @@ const fmtMap = { "*.js": "node fmt.js" };
 const hooks = (map) => JSON.stringify({ hooks: map });
 const stagedConfig = JSON.stringify({ staged: fmtMap });
 
+// Both patterns match a.js. The first command is slow, so it ends last when they overlap.
+const order = (options, ...args) => {
+  const r = repo({
+    "a.js": "one\n",
+    "slow.js": `setTimeout(() => require("node:fs").appendFileSync("order", "1"), 400);\n`,
+    "fast.js": `require("node:fs").appendFileSync("order", "2");\n`,
+    ".nano-hooks.json": JSON.stringify({
+      staged: { "*.js": "node slow.js", "a.*": "node fast.js" },
+      options,
+    }),
+  });
+  stage(r, "a.js", "uno\n");
+  expect(nano(r, "staged", ...args).status).toBe(0);
+  return r.read("order");
+};
+
 describe("nano-hooks staged", () => {
   it("formats staged files and exits 0", () => {
     const r = repo({ "a.js": "one\n", ".nano-hooks.json": stagedConfig });
@@ -97,6 +113,37 @@ describe("nano-hooks staged", () => {
 
     expect(nano(r, "staged").status).toBe(1);
     expect(nano(r, "staged", "--allow-empty").status).toBe(0);
+  });
+
+  it("options.allowEmpty in the configuration lets an emptied commit through", () => {
+    const r = repo({
+      "a.js": "x\n",
+      ".nano-hooks.json": JSON.stringify({
+        staged: { "*.js": "node reset.js" },
+        options: { allowEmpty: true },
+      }),
+    });
+    stage(r, "a.js", "y\n");
+
+    expect(nano(r, "staged").status).toBe(0);
+  });
+
+  describe("concurrent patterns", () => {
+    it("run side by side by default", () => {
+      expect(order({})).toBe("21");
+    });
+
+    it("run one after the other with options.concurrent: false", () => {
+      expect(order({ concurrent: false })).toBe("12");
+    });
+
+    it("run one after the other with --no-concurrent", () => {
+      expect(order({}, "--no-concurrent")).toBe("12");
+    });
+
+    it("--no-concurrent wins over options.concurrent: true", () => {
+      expect(order({ concurrent: true }, "--no-concurrent")).toBe("12");
+    });
   });
 
   it("--bail is accepted", () => {

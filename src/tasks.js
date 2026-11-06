@@ -155,33 +155,39 @@ async function runCommands(group, signal) {
 }
 
 /**
- * Run the groups side by side. With `bail`, the first failing command aborts the rest.
+ * Run the groups side by side, or one after the other with `concurrent: false`. With
+ * `bail`, the first failing command aborts the rest. Run the groups one after the other
+ * when several patterns can match the same file and a command changes files.
  * @throws {CommandError} when any command failed
  */
-export async function runCommandGroups(parent, groups, { bail = false } = {}) {
+export async function runCommandGroups(parent, groups, { bail = false, concurrent = true } = {}) {
   const controller = bail ? new AbortController() : undefined;
   const errors = [];
 
-  await Promise.all(
-    groups.map(async (group) => {
-      group.parent = parent;
+  const runGroup = async (group) => {
+    group.parent = parent;
 
-      if (!group.fileCount || controller?.signal.aborted) {
-        group.state = "warn";
-        return;
-      }
+    if (!group.fileCount || controller?.signal.aborted) {
+      group.state = "warn";
+      return;
+    }
 
-      group.state = "run";
-      const failures = await runCommands(group, controller?.signal);
-      if (failures.length) {
-        group.state = "fail";
-        errors.push(...failures);
-        controller?.abort();
-      } else {
-        group.state = controller?.signal.aborted ? "warn" : "done";
-      }
-    }),
-  );
+    group.state = "run";
+    const failures = await runCommands(group, controller?.signal);
+    if (failures.length) {
+      group.state = "fail";
+      errors.push(...failures);
+      controller?.abort();
+    } else {
+      group.state = controller?.signal.aborted ? "warn" : "done";
+    }
+  };
+
+  if (concurrent) {
+    await Promise.all(groups.map(runGroup));
+  } else {
+    for (const group of groups) await runGroup(group);
+  }
 
   if (errors.length) throw new CommandError(errors.join("\n\n"));
 }

@@ -13,7 +13,17 @@ import { CommandError, createCommandGroups, runCommandGroups } from "./tasks.js"
  * @returns {Promise<boolean>} false when no staged file matched any pattern
  * @throws {AggregateError} with one error per failed step
  */
-async function runTasks({ allowEmpty, gitPaths, config, stream, files, cwd, quiet, bail }) {
+async function runTasks({
+  allowEmpty,
+  gitPaths,
+  config,
+  stream,
+  files,
+  cwd,
+  quiet,
+  bail,
+  concurrent,
+}) {
   const workflow = createGitWorkflow({
     allowEmpty,
     rootPath: gitPaths.root,
@@ -68,7 +78,7 @@ async function runTasks({ allowEmpty, gitPaths, config, stream, files, cwd, quie
       run: async (task) => {
         task.tasks = groups;
         try {
-          await runCommandGroups(task, groups, { bail });
+          await runCommandGroups(task, groups, { bail, concurrent });
         } catch (error) {
           rollback = true;
           throw error;
@@ -158,6 +168,7 @@ function report(error, stream) {
  * @param {string} [options.cwd] only staged files below this directory are processed
  * @param {boolean} [options.allowEmpty] allow a commit that is empty once the commands ran
  * @param {boolean} [options.bail] stop after the first failing command
+ * @param {boolean} [options.concurrent] run the patterns side by side (default) or one by one
  * @param {boolean} [options.quiet] do not draw task progress
  * @param {NodeJS.WriteStream} [options.stream] where progress and errors go, stderr by default
  */
@@ -166,6 +177,7 @@ export async function runStaged({
   cwd = process.cwd(),
   allowEmpty = false,
   bail = false,
+  concurrent = true,
   quiet = false,
   stream = process.stderr,
 } = {}) {
@@ -186,7 +198,17 @@ export async function runStaged({
       return;
     }
 
-    const ran = await runTasks({ allowEmpty, gitPaths, config, stream, files, cwd, quiet, bail });
+    const ran = await runTasks({
+      allowEmpty,
+      gitPaths,
+      config,
+      stream,
+      files,
+      cwd,
+      quiet,
+      bail,
+      concurrent,
+    });
     if (!ran) log.info("No files match any configured task.", { stream });
   } catch (error) {
     for (const cause of error instanceof AggregateError ? error.errors : [error]) {

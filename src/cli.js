@@ -26,9 +26,17 @@ Options for run:
 Options for staged:
   --allow-empty        Allow empty commits
   --bail               Stop after the first failing command
+  --no-concurrent      Run the patterns one after the other
+
+These options can also be set in the "options" section of the configuration.
+A command line option wins over the configuration.
 `;
 
-const STAGED_FLAGS = { "--allow-empty": "allowEmpty", "--bail": "bail" };
+const STAGED_FLAGS = {
+  "--allow-empty": ["allowEmpty", true],
+  "--bail": ["bail", true],
+  "--no-concurrent": ["concurrent", false],
+};
 
 /**
  * Options may appear before or after the command. After `run <hook>`, everything is an
@@ -51,7 +59,8 @@ function parseArgs(argv) {
       if (!value || value.startsWith("-")) throw new Error(`Option "${arg}" needs a path.`);
       options.config = value;
     } else if (arg in STAGED_FLAGS) {
-      options[STAGED_FLAGS[arg]] = true;
+      const [name, value] = STAGED_FLAGS[arg];
+      options[name] = value;
       stagedFlags.push(arg);
     } else if (arg.startsWith("-")) {
       throw new Error(`Unknown option "${arg}".`);
@@ -141,11 +150,15 @@ async function main(argv) {
     }
 
     if (command === "staged") {
-      const { staged } = await loadConfig(process.cwd(), { file: options.config });
+      const { staged, options: configured } = await loadConfig(process.cwd(), {
+        file: options.config,
+      });
+      // A command line option wins over the configuration.
+      const { allowEmpty, bail, concurrent } = { ...configured, ...options };
       // Let rollback finish if the user interrupts a running commit.
       process.on("SIGINT", () => {});
       try {
-        await runStaged({ config: staged, allowEmpty: options.allowEmpty, bail: options.bail });
+        await runStaged({ config: staged, allowEmpty, bail, concurrent });
       } catch {
         // runStaged has already reported the errors.
         return 1;

@@ -34,7 +34,10 @@ export const VALID_HOOKS = [
   "post-index-change",
 ];
 
-const SECTIONS = new Set(["hooks", "staged", "preserveUnused"]);
+const SECTIONS = new Set(["hooks", "staged", "options", "preserveUnused"]);
+/** The keys of the `options` section that are plain true or false flags. */
+const FLAG_OPTIONS = ["concurrent", "bail", "allowEmpty"];
+const OPTIONS = new Set([...FLAG_OPTIONS, "preserveUnused"]);
 /**
  * Search order. A dedicated file wins over the `package.json` key, because it is the more
  * specific choice. Among the dedicated files, plain data comes before code, so that a
@@ -96,7 +99,7 @@ function validate(raw) {
     problems.push(
       VALID_HOOKS.includes(key)
         ? `${key}: hooks go under "hooks" (hooks.${key})`
-        : `${key}: unknown option (expected hooks, staged or preserveUnused)`,
+        : `${key}: unknown option (expected hooks, staged, options or preserveUnused)`,
     );
   }
 
@@ -115,16 +118,34 @@ function validate(raw) {
     }
   }
 
-  const keep = raw.preserveUnused;
-  if (keep !== undefined && typeof keep !== "boolean") {
-    if (!Array.isArray(keep)) {
-      problems.push("preserveUnused: must be true, false or a list of hook names");
+  // The top-level preserveUnused is the older spelling of options.preserveUnused.
+  const checkPreserve = (value, path) => {
+    if (value === undefined || typeof value === "boolean") return;
+    if (!Array.isArray(value)) {
+      problems.push(`${path}: must be true, false or a list of hook names`);
+      return;
+    }
+    value.forEach((name, i) => {
+      if (VALID_HOOKS.includes(name)) return;
+      problems.push(`${path}[${i}]: unknown git hook "${name}"`);
+      unknownHook = true;
+    });
+  };
+  checkPreserve(raw.preserveUnused, "preserveUnused");
+
+  if ("options" in raw) {
+    if (!isObject(raw.options)) {
+      problems.push("options: must be an object");
     } else {
-      keep.forEach((name, i) => {
-        if (VALID_HOOKS.includes(name)) return;
-        problems.push(`preserveUnused[${i}]: unknown git hook "${name}"`);
-        unknownHook = true;
-      });
+      for (const [name, value] of Object.entries(raw.options)) {
+        if (!OPTIONS.has(name)) {
+          problems.push(`options.${name}: unknown option (expected ${[...OPTIONS].join(", ")})`);
+        } else if (name === "preserveUnused") {
+          checkPreserve(value, "options.preserveUnused");
+        } else if (typeof value !== "boolean") {
+          problems.push(`options.${name}: must be true or false`);
+        }
+      }
     }
   }
 
@@ -158,11 +179,12 @@ function validate(raw) {
  *   hooks: Record<string, string>,
  *   staged?: Record<string, string | string[] | Function>,
  *   preserveUnused: boolean | string[],
+ *   options: { concurrent?: boolean, bail?: boolean, allowEmpty?: boolean },
  * }>}
  */
 export async function loadConfig(cwd = process.cwd(), { file } = {}) {
   const found = file ? await readFile(cwd, file) : await find(cwd);
-  if (!found) return { hooks: {}, preserveUnused: false };
+  if (!found) return { hooks: {}, preserveUnused: false, options: {} };
 
   const problems = validate(found.raw);
   if (problems.length) {
@@ -170,6 +192,8 @@ export async function loadConfig(cwd = process.cwd(), { file } = {}) {
     throw new Error([`Invalid nano-hooks configuration in ${found.file}:`, ...lines].join("\n"));
   }
 
-  const { hooks = {}, staged, preserveUnused = false } = found.raw;
-  return { hooks, staged, preserveUnused };
+  const { hooks = {}, staged, options = {} } = found.raw;
+  // options.preserveUnused wins; the top-level key stays as a fallback for older configs.
+  const { preserveUnused = found.raw.preserveUnused ?? false, ...flags } = options;
+  return { hooks, staged, preserveUnused, options: flags };
 }

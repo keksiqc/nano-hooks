@@ -188,6 +188,24 @@ describe("install", () => {
     expect(existsSync(hookPath(r, "pre-push"))).toBe(false);
   });
 
+  it("options.preserveUnused keeps hooks and wins over the top-level key", async () => {
+    const r = repo({ "pre-commit": "echo a", "commit-msg": "echo b", "pre-push": "echo c" });
+    await install({ cwd: r.dir });
+    writeFileSync(
+      join(r.dir, ".nano-hooks.json"),
+      JSON.stringify({
+        hooks: { "pre-commit": "echo a" },
+        preserveUnused: true,
+        options: { preserveUnused: ["commit-msg"] },
+      }),
+    );
+
+    await install({ cwd: r.dir });
+
+    expect(existsSync(hookPath(r, "commit-msg"))).toBe(true);
+    expect(existsSync(hookPath(r, "pre-push"))).toBe(false);
+  });
+
   it("is idempotent", async () => {
     const r = repo({ "pre-commit": "echo a" });
     await install({ cwd: r.dir });

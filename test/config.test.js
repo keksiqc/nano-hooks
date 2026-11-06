@@ -33,6 +33,7 @@ describe("loadConfig", () => {
     expect(await loadConfig(r.dir)).toEqual({
       hooks: { "pre-commit": "echo hi" },
       preserveUnused: false,
+      options: {},
     });
   });
 
@@ -77,7 +78,7 @@ describe("loadConfig", () => {
   it("returns empty defaults when no config exists", async () => {
     const r = repo({ "package.json": json({ name: "x" }) });
 
-    expect(await loadConfig(r.dir)).toEqual({ hooks: {}, preserveUnused: false });
+    expect(await loadConfig(r.dir)).toEqual({ hooks: {}, preserveUnused: false, options: {} });
   });
 
   it("reads all three sections", async () => {
@@ -93,7 +94,59 @@ describe("loadConfig", () => {
       hooks: { "pre-commit": "x" },
       staged: { "*.js": "eslint", "*.css": ["a", "b"] },
       preserveUnused: ["commit-msg"],
+      options: {},
     });
+  });
+
+  it("reads the options section", async () => {
+    const r = repo({
+      ".nano-hooks.json": json({
+        options: { concurrent: false, bail: true, allowEmpty: true, preserveUnused: ["pre-push"] },
+      }),
+    });
+
+    expect(await loadConfig(r.dir)).toMatchObject({
+      preserveUnused: ["pre-push"],
+      options: { concurrent: false, bail: true, allowEmpty: true },
+    });
+  });
+
+  it("uses the top-level preserveUnused when options has none", async () => {
+    const r = repo({
+      ".nano-hooks.json": json({ preserveUnused: true, options: { bail: true } }),
+    });
+
+    expect(await loadConfig(r.dir)).toMatchObject({
+      preserveUnused: true,
+      options: { bail: true },
+    });
+  });
+
+  it("prefers options.preserveUnused over the top-level key", async () => {
+    const r = repo({
+      ".nano-hooks.json": json({ preserveUnused: true, options: { preserveUnused: false } }),
+    });
+
+    expect((await loadConfig(r.dir)).preserveUnused).toBe(false);
+  });
+
+  it("reports problems in the options section", async () => {
+    const message = await problems({
+      ".nano-hooks.json": json({
+        options: { concurrent: "no", nope: 1, preserveUnused: ["pre-comit"] },
+      }),
+    });
+
+    expect(message).toContain("options.concurrent: must be true or false");
+    expect(message).toContain("options.nope: unknown option (expected concurrent, bail,");
+    expect(message).toContain('options.preserveUnused[0]: unknown git hook "pre-comit"');
+    expect(message).toContain("Valid hooks:");
+  });
+
+  it("rejects an options section that is not an object", async () => {
+    const message = await problems({ ".nano-hooks.json": json({ options: true }) });
+
+    expect(message).toContain("options: must be an object");
   });
 
   it("reports every problem at once with the file name and key paths", async () => {
@@ -113,7 +166,9 @@ describe("loadConfig", () => {
     expect(message).toContain(
       'staged["*.js"]: must be a command, a list of commands or a function',
     );
-    expect(message).toContain("foo: unknown option (expected hooks, staged or preserveUnused)");
+    expect(message).toContain(
+      "foo: unknown option (expected hooks, staged, options or preserveUnused)",
+    );
     expect(message).toContain(`Valid hooks: ${VALID_HOOKS.join(", ")}`);
   });
 

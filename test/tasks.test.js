@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { chunkFiles, createCommandGroups, splitCommand } from "../src/tasks.js";
+import { chunkFiles, createCommandGroups, runCommandGroups, splitCommand } from "../src/tasks.js";
 import { createTempDir } from "./helpers.js";
 
 describe("splitCommand", () => {
@@ -75,5 +75,57 @@ describe("createCommandGroups", () => {
     await group.tasks[0].run();
 
     expect(calls(dir)).toEqual([2, 2, 1]);
+  });
+});
+
+/** Two groups whose single task takes a moment; `log` records when each starts and ends. */
+function groups(log) {
+  return ["a", "b"].map((name) => {
+    const group = { title: name, fileCount: 1 };
+    group.tasks = [
+      {
+        title: name,
+        pattern: name,
+        parent: group,
+        run: async () => {
+          log.push(`start ${name}`);
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          log.push(`end ${name}`);
+        },
+      },
+    ];
+    return group;
+  });
+}
+
+describe("runCommandGroups", () => {
+  it("runs the groups side by side by default", async () => {
+    const log = [];
+
+    await runCommandGroups({}, groups(log));
+
+    expect(log).toEqual(["start a", "start b", "end a", "end b"]);
+  });
+
+  it("runs the groups one after the other with concurrent: false", async () => {
+    const log = [];
+
+    await runCommandGroups({}, groups(log), { concurrent: false });
+
+    expect(log).toEqual(["start a", "end a", "start b", "end b"]);
+  });
+
+  it("skips the later groups after a failure with bail and concurrent: false", async () => {
+    const log = [];
+    const [first, second] = groups(log);
+    first.tasks[0].run = async () => {
+      throw new Error("boom");
+    };
+
+    await expect(
+      runCommandGroups({}, [first, second], { concurrent: false, bail: true }),
+    ).rejects.toThrow(/boom/);
+    expect(log).toEqual([]);
+    expect(second.state).toBe("warn");
   });
 });
