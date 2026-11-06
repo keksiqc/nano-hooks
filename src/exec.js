@@ -95,37 +95,104 @@ function windowsCommand(file, args) {
 }
 
 /**
- * Run `command` and resolve with its combined stdout and stderr. Commands are looked up in
- * the project's `node_modules/.bin` before the regular PATH. Rejects with an Error whose
- * message is the command output when it exits non-zero.
+ * @typedef {object} ExecResult
+ * @property {string} stdout the standard output
+ * @property {string} stderr the standard error
+ * @property {string} output stdout and stderr combined, in arrival order
+ * @property {number | null} exitCode null when the process was killed by a signal
+ */
+
+/**
+ * @typedef {object} ExecOptions
+ * @property {string} [cwd] the working directory
+ * @property {Record<string, string | undefined>} [env] merged over `process.env`; an
+ * `undefined` value removes the variable
+ * @property {AbortSignal} [signal] kills the process when aborted
+ * @property {number} [timeout] milliseconds before the process is killed
+ * @property {boolean} [throwOnError] reject on a non-zero exit code. Defaults to true.
+ */
+
+function failure(command, result, reason) {
+  const error = new Error(result.output.trim() || reason);
+  return Object.assign(error, { command, ...result });
+}
+
+/**
+ * Run `command` without a shell, like tinyexec's `x`. Commands are looked up in the
+ * project's `node_modules/.bin` before the regular PATH. Resolves with the exit code and
+ * output; rejects when the command is missing, cannot start, times out, is aborted, or (with
+ * `throwOnError`, the default) exits non-zero. Rejections carry `command`, `stdout`,
+ * `stderr`, `output` and `exitCode`, and the message is the command output when there is any.
  * @param {string} command
  * @param {string[]} [args]
- * @param {{ cwd?: string, env?: Record<string, string>, signal?: AbortSignal }} [options]
- * @returns {Promise<string>}
+ * @param {ExecOptions} [options]
+ * @returns {Promise<ExecResult>}
  */
-export async function run(command, args = [], { cwd = process.cwd(), env, signal } = {}) {
+export async function exec(
+  command,
+  args = [],
+  { cwd = process.cwd(), env, signal, timeout, throwOnError = true } = {},
+) {
   const fullEnv = childEnv(env);
+  for (const key of Object.keys(fullEnv)) if (fullEnv[key] === undefined) delete fullEnv[key];
   const target = windowsCommand(which(command, fullEnv, cwd), args);
 
   return new Promise((resolvePromise, reject) => {
+    const result = { stdout: "", stderr: "", output: "", exitCode: null };
+    let timedOut = false;
+    let settled = false;
+    let timer;
+
+    const settle = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn(value);
+    };
+
     const child = spawn(target.file, target.args, {
       cwd,
       env: fullEnv,
       signal,
+      shell: false,
       stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
       windowsVerbatimArguments: target.verbatim,
     });
 
-    let output = "";
-    for (const stream of [child.stdout, child.stderr]) {
-      stream.setEncoding("utf8");
-      stream.on("data", (data) => (output += data));
+    if (timeout > 0) {
+      timer = setTimeout(() => {
+        timedOut = true;
+        child.kill("SIGKILL");
+      }, timeout);
     }
 
-    child.on("error", reject);
+    for (const name of ["stdout", "stderr"]) {
+      child[name].setEncoding("utf8");
+      child[name].on("data", (data) => {
+        result[name] += data;
+        result.output += data;
+      });
+    }
+
+    child.on("error", (error) => settle(reject, Object.assign(error, { command, ...result })));
     child.on("close", (code) => {
-      if (code === 0) resolvePromise(output);
-      else reject(new Error(output.trim() || `${command} exited with code ${code}`));
+      result.exitCode = code;
+      if (timedOut)
+        settle(reject, failure(command, result, `${command} timed out after ${timeout}ms`));
+      else if (code === 0 || !throwOnError) settle(resolvePromise, result);
+      else settle(reject, failure(command, result, `${command} exited with code ${code}`));
     });
   });
+}
+
+/**
+ * Run `command` and resolve with its combined stdout and stderr. See {@link exec}.
+ * @param {string} command
+ * @param {string[]} [args]
+ * @param {Omit<ExecOptions, "throwOnError">} [options]
+ * @returns {Promise<string>}
+ */
+export async function run(command, args = [], options = {}) {
+  return (await exec(command, args, options)).output;
 }
