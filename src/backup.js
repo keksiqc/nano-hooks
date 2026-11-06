@@ -16,7 +16,7 @@ export class EmptyCommitError extends Error {
  * @property {string} title what the step does
  * @property {"run" | "done" | "fail"} state the outcome, set by the workflow
  * @property {object[]} [tasks] the progress nodes of the task execution, for the
- * "Running tasks" step
+ * "Running tasks" step. The task execution sets their state, the workflow never does.
  */
 
 /**
@@ -34,7 +34,7 @@ export class EmptyCommitError extends Error {
  * @param {string} options.rootPath the repository root
  * @param {{ working: string[], changed: string[], deleted: string[] }} options.files the
  * staged files, as `stagedFiles` of the git helpers returns them
- * @param {{ tasks?: object[], run: (step: WorkflowStep) => Promise<void> }} options.execute
+ * @param {{ tasks?: object[], run: () => Promise<void> }} options.execute
  * the task execution. It owns its own `tasks` nodes, which the observer can read.
  * @param {(step: WorkflowStep) => void} [options.onStep] called when a step starts. The
  * step changes state later. The return value and errors of the observer are ignored.
@@ -118,9 +118,7 @@ export async function runWithBackup({
       await git.checkout(modified);
     });
   }
-  ok =
-    ok &&
-    (await step("Running tasks for staged files", (node) => execute.run(node), execute.tasks));
+  ok = ok && (await step("Running tasks for staged files", () => execute.run(), execute.tasks));
   ok =
     ok &&
     (await step("Applying modifications from tasks", async () => {

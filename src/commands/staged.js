@@ -1,5 +1,6 @@
 // The staged-file runner is based on nano-staged (MIT), see LICENSE.
 import { realpathSync } from "node:fs";
+import { styleText } from "node:util";
 import { loadConfig } from "../config.js";
 import { EmptyCommitError, runWithBackup } from "../backup.js";
 import { createGit } from "../git.js";
@@ -45,7 +46,7 @@ async function runTasks({
       files,
       execute: {
         tasks: groups,
-        run: (step) => runCommandGroups(step, groups, { bail, concurrent }),
+        run: () => runCommandGroups(groups, { bail, concurrent }),
       },
       onStep: (step) => renderer.start(step),
     });
@@ -74,9 +75,19 @@ function advise(error) {
     : error;
 }
 
+/** The failed commands with their output, styled for a terminal. */
+function formatFailures(failures) {
+  return failures
+    .map(
+      ({ pattern, title, message }) =>
+        `${styleText("red", pattern)} ${styleText("dim", ">")} ${styleText("red", title)}:\n${message}`,
+    )
+    .join("\n\n");
+}
+
 /** Command output is already formatted; anything else is a plain error line. */
 function report(error, stream) {
-  if (error instanceof CommandError) stream.write(`\n${error.message}\n`);
+  if (error instanceof CommandError) stream.write(`\n${formatFailures(error.failures)}\n`);
   else log.error(error?.message ?? String(error), { markup: false, stream });
 }
 

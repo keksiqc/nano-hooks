@@ -1,5 +1,4 @@
 import { isAbsolute, normalize, relative, resolve } from "node:path";
-import { styleText } from "node:util";
 import { run } from "./exec.js";
 import { globToRegex } from "./glob.js";
 
@@ -15,9 +14,41 @@ const ARGUMENT = /([^\s'"]([^\s'"]*(['"])([^\3]*?)\3)+[^\s'"]*)|[^\s'"]+|(['"])(
  */
 const MAX_ARG_LENGTH = ({ darwin: 262_144, win32: 8191 }[process.platform] ?? 131_072) / 2;
 
-/** Thrown when one or more configured commands failed; the message is ready to print. */
+/**
+ * A node of the task tree that the runner below builds and runs. The runner owns the
+ * nodes: it is the only code that sets `state`. A renderer reads them to show progress.
+ * @typedef {object} TaskNode
+ * @property {string} title plain text, without terminal styling
+ * @property {string} [detail] plain text that goes after the title, such as a file count
+ * @property {"run" | "done" | "fail" | "warn"} [state] unset while the task waits, `warn`
+ * when it was skipped
+ * @property {TaskNode[]} [tasks] the commands of a group
+ */
+
+/**
+ * One failed command.
+ * @typedef {object} CommandFailure
+ * @property {string} pattern the glob pattern of the group
+ * @property {string} title the command line
+ * @property {string} message the output of the command
+ */
+
+/**
+ * Thrown when one or more configured commands failed. `failures` has the details; the
+ * message is plain text, and the reporting code adds styling.
+ */
 export class CommandError extends Error {
   name = "CommandError";
+
+  /** @param {CommandFailure[]} failures */
+  constructor(failures) {
+    super(
+      failures
+        .map(({ pattern, title, message }) => `${pattern} > ${title}:\n${message}`)
+        .join("\n\n"),
+    );
+    this.failures = failures;
+  }
 }
 
 /** Split a command line into arguments, honouring single and double quotes. */
@@ -55,7 +86,8 @@ export function chunkFiles(files, usedLength, maxLength = MAX_ARG_LENGTH) {
 
 /**
  * Build one task group per configured glob pattern, holding a task per command.
- * Groups without matching files get no tasks.
+ * Groups without matching files get no tasks. The groups are `TaskNode`s that
+ * `runCommandGroups` runs.
  * @param {object} options
  * @param {Record<string, string | string[] | Function>} options.config
  * @param {string[]} options.files staged files, relative to `rootPath`
@@ -94,16 +126,12 @@ export async function createCommandGroups({
       ? `${matched.length} ${matched.length > 1 ? "files" : "file"}`
       : "no files";
 
-    const group = {
-      title: `${pattern}${styleText("dim", ` - ${suffix}`)}`,
-      fileCount: matched.length,
-    };
+    const group = { title: pattern, detail: suffix, fileCount: matched.length };
     group.tasks = lines.map((line) => {
       const [command, ...args] = splitCommand(line);
       return {
         title: line,
         pattern,
-        parent: group,
         // A function has already chosen the arguments; a plain command gets the files, as
         // many per call as fit in one command line.
         run: async (signal) => {
@@ -122,9 +150,12 @@ export async function createCommandGroups({
   return groups;
 }
 
-/** Run a group's commands in order; the rest are skipped after the first failure. */
+/**
+ * Run a group's commands in order; the rest are skipped after the first failure.
+ * @returns {Promise<CommandFailure[]>}
+ */
 async function runCommands(group, signal) {
-  const errors = [];
+  const failures = [];
   let failed = false;
 
   for (const task of group.tasks) {
@@ -144,39 +175,37 @@ async function runCommands(group, signal) {
       }
       failed = true;
       task.state = "fail";
-      task.title = styleText("red", task.title);
-      errors.push(
-        `${styleText("red", task.pattern)} ${styleText("dim", ">")} ${task.title}:\n${error.message.trim()}`,
-      );
+      failures.push({ pattern: task.pattern, title: task.title, message: error.message.trim() });
     }
   }
 
-  return errors;
+  return failures;
 }
 
 /**
  * Run the groups side by side, or one after the other with `concurrent: false`. With
  * `bail`, the first failing command aborts the rest. Run the groups one after the other
  * when several patterns can match the same file and a command changes files.
+ * The groups and their tasks get their `state` here and nowhere else.
+ * @param {TaskNode[]} groups
+ * @param {{ bail?: boolean, concurrent?: boolean }} [options]
  * @throws {CommandError} when any command failed
  */
-export async function runCommandGroups(parent, groups, { bail = false, concurrent = true } = {}) {
+export async function runCommandGroups(groups, { bail = false, concurrent = true } = {}) {
   const controller = bail ? new AbortController() : undefined;
-  const errors = [];
+  const failures = [];
 
   const runGroup = async (group) => {
-    group.parent = parent;
-
     if (!group.fileCount || controller?.signal.aborted) {
       group.state = "warn";
       return;
     }
 
     group.state = "run";
-    const failures = await runCommands(group, controller?.signal);
-    if (failures.length) {
+    const failed = await runCommands(group, controller?.signal);
+    if (failed.length) {
       group.state = "fail";
-      errors.push(...failures);
+      failures.push(...failed);
       controller?.abort();
     } else {
       group.state = controller?.signal.aborted ? "warn" : "done";
@@ -189,5 +218,5 @@ export async function runCommandGroups(parent, groups, { bail = false, concurren
     for (const group of groups) await runGroup(group);
   }
 
-  if (errors.length) throw new CommandError(errors.join("\n\n"));
+  if (failures.length) throw new CommandError(failures);
 }
