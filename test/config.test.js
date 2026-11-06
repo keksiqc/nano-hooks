@@ -138,7 +138,7 @@ describe("loadConfig", () => {
     });
 
     expect(message).toContain("options.concurrent: must be true or false");
-    expect(message).toContain("options.nope: unknown option (expected concurrent, bail,");
+    expect(message).toContain("options.nope: unknown option (expected allowEmpty, bail,");
     expect(message).toContain('options.preserveUnused[0]: unknown git hook "pre-comit"');
     expect(message).toContain("Valid hooks:");
   });

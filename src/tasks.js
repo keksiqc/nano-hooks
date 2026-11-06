@@ -2,9 +2,6 @@ import { isAbsolute, normalize, relative, resolve } from "node:path";
 import { run } from "./exec.js";
 import { globToRegex } from "./glob.js";
 
-/** Passed to function tasks so one config can serve different runners. */
-const TASK_TYPE = "staged";
-
 /** Matches a bare word, a quoted string, or a word with quoted parts, like a shell would. */
 const ARGUMENT = /([^\s'"]([^\s'"]*(['"])([^\3]*?)\3)+[^\s'"]*)|[^\s'"]+|(['"])([^\5]*?)\5/g;
 
@@ -93,6 +90,8 @@ export function chunkFiles(files, usedLength, maxLength = MAX_ARG_LENGTH) {
  * @param {string[]} options.files staged files, relative to `rootPath`
  * @param {string} options.cwd only files below this directory are matched
  * @param {string} options.rootPath the repository root, where commands run
+ * @param {string} [options.type] passed to function tasks, so that one configuration can
+ * serve different runners
  * @param {number} [options.maxArgLength] the most characters for the files of one call;
  * a command that would exceed it runs several times on parts of the files
  */
@@ -101,6 +100,7 @@ export async function createCommandGroups({
   files,
   cwd,
   rootPath,
+  type,
   maxArgLength = MAX_ARG_LENGTH,
 }) {
   // File paths as seen from cwd, with forward slashes.
@@ -120,7 +120,7 @@ export async function createCommandGroups({
 
     const isFunction = typeof commands === "function";
     const lines = matched.length
-      ? [].concat(isFunction ? await commands({ filenames: matched, type: TASK_TYPE }) : commands)
+      ? [].concat(isFunction ? await commands({ filenames: matched, type }) : commands)
       : [];
     const suffix = matched.length
       ? `${matched.length} ${matched.length > 1 ? "files" : "file"}`

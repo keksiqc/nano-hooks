@@ -22,6 +22,9 @@ import { command as uninstall } from "./uninstall.js";
  * @property {(loaded: object, context: {config?: string, cd: string}) => Record<string, string | string[]>} [defaultHooks]
  *   the hooks this command adds when the configuration does not set them, such as the
  *   default `pre-commit`. `cd` is a prefix for commands that run from another directory.
+ * @property {{name: string, validate: (value: unknown) => string[]}} [section] a section of
+ *   the configuration that belongs to this command. `validate` returns one line for each
+ *   problem in the value.
  * @property {string} [note] extra lines for the help
  * @property {number} [passthrough] accepts arguments. Option parsing stops after this many
  *   arguments, and the rest go to the command untouched.

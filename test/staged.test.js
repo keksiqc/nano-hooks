@@ -129,6 +129,23 @@ describe("runStaged", () => {
     expect(r.git("show", ":a.js")).toBe("UNO\n");
   });
 
+  it("tells function values that the runner is staged", async () => {
+    const r = repo({ "a.js": "one\n" });
+    r.write("a.js", "uno\n");
+    r.git("add", "a.js");
+    const types = [];
+    const config = {
+      "*.js": ({ type }) => {
+        types.push(type);
+        return "node fmt.js a.js";
+      },
+    };
+
+    await run(r, { config });
+
+    expect(types).toEqual(["staged"]);
+  });
+
   it("only processes files under cwd in a sub-package", async () => {
     const r = repo({
       "packages/a/x.js": "one\n",

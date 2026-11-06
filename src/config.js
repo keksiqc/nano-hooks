@@ -34,10 +34,21 @@ export const VALID_HOOKS = [
   "post-index-change",
 ];
 
-const SECTIONS = new Set(["hooks", "staged", "options", "preserveUnused"]);
-/** The keys of the `options` section that are plain true or false flags. */
-const FLAG_OPTIONS = ["concurrent", "bail", "allowEmpty"];
-const OPTIONS = new Set([...FLAG_OPTIONS, "preserveUnused"]);
+/**
+ * What the configuration accepts besides the hooks. The commands add to it: each flag of a
+ * command is a true or false key of `options`, and a command can own a whole section.
+ * @param {import("./commands/index.js").Command[]} commands
+ */
+function schema(commands) {
+  const sections = commands.flatMap((command) => command.section ?? []);
+  const flags = [...new Set(commands.flatMap((command) => command.flags ?? []).map((f) => f.name))];
+  return {
+    sections,
+    sectionNames: ["hooks", ...sections.map((s) => s.name), "options", "preserveUnused"],
+    optionNames: [...flags, "preserveUnused"],
+  };
+}
+
 /**
  * Search order. A dedicated file wins over the `package.json` key, because it is the more
  * specific choice. Among the dedicated files, plain data comes before code, so that a
@@ -45,11 +56,12 @@ const OPTIONS = new Set([...FLAG_OPTIONS, "preserveUnused"]);
  */
 const FILES = [".nano-hooks.json", ".nano-hooks.js", ".nano-hooks.mjs"];
 
-const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+export const isObject = (value) =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
 const isCommand = (value) => typeof value === "string" && value.trim() !== "";
-const isCommandList = (value) =>
+/** A command, or a non-empty list of commands. */
+export const isCommandList = (value) =>
   isCommand(value) || (Array.isArray(value) && value.length > 0 && value.every(isCommand));
-const isTask = (value) => typeof value === "function" || isCommandList(value);
 
 async function read(path) {
   try {
@@ -87,18 +99,19 @@ export async function findConfig(cwd) {
 }
 
 /** Collect every problem in the config, as lines naming the offending key. */
-function validate(raw) {
+function validate(raw, { sections, sectionNames, optionNames }) {
   if (!isObject(raw)) return ["configuration must be an object"];
 
   const problems = [];
   let unknownHook = false;
 
   for (const key of Object.keys(raw)) {
-    if (SECTIONS.has(key)) continue;
+    if (sectionNames.includes(key)) continue;
+    const expected = `${sectionNames.slice(0, -1).join(", ")} or ${sectionNames.at(-1)}`;
     problems.push(
       VALID_HOOKS.includes(key)
         ? `${key}: hooks go under "hooks" (hooks.${key})`
-        : `${key}: unknown option (expected hooks, staged, options or preserveUnused)`,
+        : `${key}: unknown option (expected ${expected})`,
     );
   }
 
@@ -137,8 +150,8 @@ function validate(raw) {
       problems.push("options: must be an object");
     } else {
       for (const [name, value] of Object.entries(raw.options)) {
-        if (!OPTIONS.has(name)) {
-          problems.push(`options.${name}: unknown option (expected ${[...OPTIONS].join(", ")})`);
+        if (!optionNames.includes(name)) {
+          problems.push(`options.${name}: unknown option (expected ${optionNames.join(", ")})`);
         } else if (name === "preserveUnused") {
           checkPreserve(value, "options.preserveUnused");
         } else if (typeof value !== "boolean") {
@@ -148,20 +161,8 @@ function validate(raw) {
     }
   }
 
-  if ("staged" in raw) {
-    if (!isObject(raw.staged)) {
-      problems.push("staged: must be an object of glob pattern to command(s)");
-    } else if (Object.keys(raw.staged).length === 0) {
-      problems.push("staged: must have at least one pattern");
-    } else {
-      for (const [pattern, task] of Object.entries(raw.staged)) {
-        if (!isTask(task)) {
-          problems.push(
-            `staged["${pattern}"]: must be a command, a list of commands or a function`,
-          );
-        }
-      }
-    }
+  for (const { name, validate: check } of sections) {
+    if (name in raw) problems.push(...check(raw[name]));
   }
 
   if (unknownHook) problems.push(`Valid hooks: ${VALID_HOOKS.join(", ")}`);
@@ -176,23 +177,27 @@ function validate(raw) {
  * @param {{ file?: string }} [options]
  * @returns {Promise<{
  *   hooks: Record<string, string | string[]>,
- *   staged?: Record<string, string | string[] | Function>,
  *   preserveUnused: boolean | string[],
- *   options: { concurrent?: boolean, bail?: boolean, allowEmpty?: boolean },
- * }>}
+ *   options: Record<string, boolean>,
+ * } & Record<string, unknown>>} one more key for each section that a command owns, such as
+ * the `staged` section
  */
 export async function loadConfig(cwd = process.cwd(), { file } = {}) {
+  // The commands import this module, so their list loads on first use.
+  const { commands } = await import("./commands/index.js");
+  const rules = schema(commands);
   const found = file ? await readFile(cwd, file) : await findConfig(cwd);
   if (!found) return { hooks: {}, preserveUnused: false, options: {} };
 
-  const problems = validate(found.raw);
+  const problems = validate(found.raw, rules);
   if (problems.length) {
     const lines = problems.map((problem) => `  ${problem}`);
     throw new Error([`Invalid nano-hooks configuration in ${found.file}:`, ...lines].join("\n"));
   }
 
-  const { hooks = {}, staged, options = {} } = found.raw;
+  const { hooks = {}, options = {} } = found.raw;
   // options.preserveUnused wins; the top-level key stays as a fallback for older configs.
   const { preserveUnused = found.raw.preserveUnused ?? false, ...flags } = options;
-  return { hooks, staged, preserveUnused, options: flags };
+  const sections = Object.fromEntries(rules.sections.map(({ name }) => [name, found.raw[name]]));
+  return { hooks, ...sections, preserveUnused, options: flags };
 }

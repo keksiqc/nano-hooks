@@ -1,7 +1,7 @@
 // The staged-file runner is based on nano-staged (MIT), see LICENSE.
 import { realpathSync } from "node:fs";
 import { styleText } from "node:util";
-import { loadConfig } from "../config.js";
+import { isCommandList, isObject, loadConfig } from "../config.js";
 import { EmptyCommitError, runWithBackup } from "../backup.js";
 import { createGit } from "../git.js";
 import { quote } from "../hooks.js";
@@ -32,6 +32,8 @@ async function runTasks({
     files: files.working,
     cwd,
     rootPath: gitPaths.root,
+    // Function tasks get this, so that one configuration can serve different runners.
+    type: "staged",
   });
   if (!groups.some((group) => group.fileCount > 0)) return false;
 
@@ -150,9 +152,23 @@ export async function runStaged({
   }
 }
 
+const isTask = (value) => typeof value === "function" || isCommandList(value);
+
+/** The problems in the `staged` section of the configuration, as lines naming the key. */
+function validateSection(staged) {
+  if (!isObject(staged)) return ["staged: must be an object of glob pattern to command(s)"];
+  if (Object.keys(staged).length === 0) return ["staged: must have at least one pattern"];
+  return Object.entries(staged)
+    .filter(([, task]) => !isTask(task))
+    .map(
+      ([pattern]) => `staged["${pattern}"]: must be a command, a list of commands or a function`,
+    );
+}
+
 /** @type {import("./index.js").Command} */
 export const command = {
   name: "staged",
+  section: { name: "staged", validate: validateSection },
   description: "Run commands on staged files",
   flags: [
     {

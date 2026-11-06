@@ -1,6 +1,6 @@
 import { styleText } from "node:util";
 
-/** Status symbols shared by the CLI and the staged runner. */
+/** Status symbols shared by the CLI and the task runner. */
 export const symbols = {
   done: styleText("green", "√"),
   fail: styleText("red", "×"),
