@@ -1,7 +1,7 @@
 // The staged-file runner is based on nano-staged (MIT), see LICENSE.
 import { realpathSync } from "node:fs";
 import { loadConfig } from "../config.js";
-import { createGitWorkflow } from "../backup.js";
+import { EmptyCommitError, runWithBackup } from "../backup.js";
 import { createGit } from "../git.js";
 import { log } from "../log.js";
 import { createRenderer } from "../renderer.js";
@@ -25,11 +25,6 @@ async function runTasks({
   bail,
   concurrent,
 }) {
-  const workflow = createGitWorkflow({
-    allowEmpty,
-    rootPath: gitPaths.root,
-    dotPath: gitPaths.dot,
-  });
   const groups = await createCommandGroups({
     config,
     files: files.working,
@@ -42,60 +37,21 @@ async function runTasks({
     isTTY: Boolean(stream.isTTY) && !process.env.CI,
     quiet,
   });
-  const modified = [...files.changed, ...files.deleted];
-
-  const errors = [];
-  /** Run one step, show it, and record its error. @returns {Promise<boolean>} true if it worked */
-  const step = async (title, run) => {
-    const task = { title, state: "run" };
-    renderer.start(task);
-    try {
-      await run(task);
-      task.state = "done";
-      return true;
-    } catch (error) {
-      task.state = "fail";
-      errors.push(error);
-      return false;
-    }
-  };
-
-  // The backup is the safety net: without it nothing else runs.
-  if (await step("Preparing nano-hooks", () => workflow.backupOriginalState())) {
-    // Each step runs only if the steps before it worked. A failure restores the original state.
-    let ok = true;
-    if (modified.length) {
-      ok = await step("Backing up unstaged changes for staged files", () =>
-        workflow.backupUnstagedFiles(modified),
-      );
-    }
-    ok =
-      ok &&
-      (await step("Running tasks for staged files", (task) => {
-        task.tasks = groups;
-        return runCommandGroups(task, groups, { bail, concurrent });
-      }));
-    ok =
-      ok &&
-      (await step("Applying modifications from tasks", () =>
-        workflow.applyModifications(files.working),
-      ));
-
-    let cleanUp = true;
-    if (!ok) {
-      cleanUp = await step("Restoring to original state because of errors", () =>
-        workflow.restoreOriginalState(),
-      );
-    } else if (modified.length) {
-      await step("Restoring unstaged changes for staged files", () =>
-        workflow.restoreUnstagedFiles(modified),
-      );
-    }
-    if (cleanUp) await step("Cleaning up temporary patch files", () => workflow.cleanUp());
+  try {
+    await runWithBackup({
+      allowEmpty,
+      rootPath: gitPaths.root,
+      dotPath: gitPaths.dot,
+      files,
+      execute: {
+        tasks: groups,
+        run: (step) => runCommandGroups(step, groups, { bail, concurrent }),
+      },
+      onStep: (step) => renderer.start(step),
+    });
+  } finally {
+    renderer.stop();
   }
-  renderer.stop();
-
-  if (errors.length) throw new AggregateError(errors, "Staged tasks failed");
   return true;
 }
 
@@ -109,6 +65,13 @@ function canonical(path) {
   } catch {
     return path;
   }
+}
+
+/** Tell how to allow an empty commit, which only this command knows. */
+function advise(error) {
+  return error instanceof EmptyCommitError
+    ? new Error(`${error.message} Use --allow-empty to allow it.`, { cause: error })
+    : error;
 }
 
 /** Command output is already formatted; anything else is a plain error line. */
@@ -169,10 +132,9 @@ export async function runStaged({
     });
     if (!ran) log.info("No files match any configured task.", { stream });
   } catch (error) {
-    for (const cause of error instanceof AggregateError ? error.errors : [error]) {
-      report(cause, stream);
-    }
-    throw error;
+    const causes = (error instanceof AggregateError ? error.errors : [error]).map(advise);
+    for (const cause of causes) report(cause, stream);
+    throw error instanceof AggregateError ? new AggregateError(causes, error.message) : causes[0];
   }
 }
 

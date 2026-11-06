@@ -1,4 +1,4 @@
-import { existsSync, symlinkSync } from "node:fs";
+import { existsSync, readFileSync, symlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { PassThrough } from "node:stream";
 import { afterEach, describe, expect, it } from "vitest";
@@ -92,7 +92,7 @@ describe("runStaged", () => {
     r.git("add", "a.js");
     const config = { "*.js": "node reset.js" };
 
-    expect(await failure(run(r, { config }))).toContain("The commit would be empty");
+    expect(await failure(run(r, { config }))).toContain("Use --allow-empty to allow it");
 
     r.write("a.js", "y\n");
     r.git("add", "a.js");
@@ -107,6 +107,7 @@ describe("runStaged", () => {
     await run(r, { config: { "*.js": "node mark.js" } });
 
     expect(existsSync(join(r.dir, "marker"))).toBe(false);
+    expect(existsSync(join(r.dir, ".git", "nano-hooks.patch"))).toBe(false);
   });
 
   it("rejects with a config message when no config exists", async () => {
@@ -193,8 +194,37 @@ describe("runStaged conflicts and bad configs", () => {
     r.git("add", "a.js");
     r.write("a.js", "uno-x\ntwo\nthree\n");
 
-    expect(await failure(run(r, { config: FMT_JS }))).toContain("A merge conflict occurred");
+    const message = await failure(run(r, { config: FMT_JS }));
+
+    expect(message).toContain("A merge conflict occurred");
     expect(r.read("a.js")).toContain("uno-x");
+    // The conflict stays open and the patches that hold the changes are kept and reported.
+    expect(r.git("ls-files", "--unmerged")).not.toBe("");
+    for (const patch of ["nano-hooks.patch", "nano-hooks_partial.patch"]) {
+      expect(existsSync(join(r.dir, ".git", patch))).toBe(true);
+      expect(message).toContain(patch);
+    }
+  });
+
+  it("refuses to run while recovery patches from an earlier run exist", async () => {
+    const r = repo({ "a.js": "one\ntwo\nthree\n" });
+    r.write("a.js", "uno\ntwo\nthree\n");
+    r.git("add", "a.js");
+    r.write("a.js", "uno-x\ntwo\nthree\n");
+    await failure(run(r, { config: FMT_JS }));
+    // Resolve the conflict, as the user would before committing again.
+    r.write("a.js", "resolved\ntwo\nthree\n");
+    r.git("add", "a.js");
+    const patch = readFileSync(join(r.dir, ".git", "nano-hooks_partial.patch"), "utf8");
+    const status = r.git("status", "--porcelain");
+    const worktree = r.read("a.js");
+
+    const message = await failure(run(r, { config: FMT_JS }));
+
+    expect(message).toContain("nano-hooks_partial.patch");
+    expect(readFileSync(join(r.dir, ".git", "nano-hooks_partial.patch"), "utf8")).toBe(patch);
+    expect(r.git("status", "--porcelain")).toBe(status);
+    expect(r.read("a.js")).toBe(worktree);
   });
 
   it("rejects outside a git repository", async () => {

@@ -132,6 +132,8 @@ If the file list is too long for one command line, nano-hooks runs the command s
 
 When the commands run, nano-hooks sets aside the unstaged changes in partially staged files. It adds formatter changes back to the commit. If a command fails, it rolls back all changes.
 
+During a run, nano-hooks saves your changes in two patch files in the Git directory: `nano-hooks.patch` and `nano-hooks_partial.patch`. It deletes them when the run succeeds or when a rollback succeeds. If a rollback or the restoration of your unstaged changes fails, for example because of a merge conflict, nano-hooks keeps the patch files and prints their paths. Use `git apply` on a patch file to get your changes back, then delete both files. While these files exist, `nano-hooks staged` stops before it changes anything and prints their paths.
+
 ## Development
 
 This project uses JavaScript modules, pnpm, oxlint, oxfmt, and vitest. It has no build step. The package exports `src/index.js` directly.
