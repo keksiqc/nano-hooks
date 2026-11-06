@@ -56,6 +56,8 @@ If the configuration has a mistake, nano-hooks rejects it and lists every proble
 - If `staged` is set and `hooks` has no `pre-commit`, the `pre-commit` hook runs the staged runner. To run other commands too, define `pre-commit` yourself: `"pre-commit": "nano-hooks staged && pnpm test"`.
 - Hook scripts add `node_modules/.bin` to `PATH`, so locally installed tools work without a path.
 - To skip all hooks for one command, set `SKIP_NANO_HOOKS=1`. For example: `SKIP_NANO_HOOKS=1 git commit`.
+- To skip the installation, set `NANO_HOOKS=0`. For example: `NANO_HOOKS=0 pnpm install`. Use it in CI or in a container build where you do not need hooks.
+- If the directory is not a git repository, `install` prints a warning and exits with code 0. A `prepare` script then does not fail an install that has no `.git` directory.
 - nano-hooks never overwrites or removes a hook that it did not write. The `install` command reports these hooks and continues.
 - If `core.hooksPath` points outside `.git`, `install` writes the hooks to that directory and prints a warning. Tools such as husky set this option, so make sure that only one tool manages the directory.
 - If a hook that nano-hooks wrote earlier is no longer configured, nano-hooks removes it. To keep it, set `preserveUnused` to `true` or list the hook name.

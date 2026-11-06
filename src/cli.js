@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { loadConfig } from "./config.js";
+import { NotGitRepositoryError } from "./git.js";
 import { install, runHook, uninstall } from "./hooks.js";
 import { log } from "./log.js";
 import { runStaged } from "./staged.js";
@@ -82,9 +83,22 @@ async function main(argv) {
     }
 
     if (command === "install") {
-      const { installed, removed, skipped, hooksDir, external } = await install({
-        config: options.config,
-      });
+      // Lets CI and container builds run `prepare` without installing hooks.
+      if (process.env.NANO_HOOKS === "0") {
+        log.info("Skipped install because NANO_HOOKS=0.");
+        return 0;
+      }
+
+      let result;
+      try {
+        result = await install({ config: options.config });
+      } catch (error) {
+        if (!(error instanceof NotGitRepositoryError)) throw error;
+        // A `prepare` script must not fail an install where there is no .git directory.
+        log.warn(`${error.message}. Hooks were not installed.`, { markup: false });
+        return 0;
+      }
+      const { installed, removed, skipped, hooksDir, external } = result;
       if (external) {
         log.warn(
           `core.hooksPath points outside .git: ${hooksDir}. Another hooks manager, such as husky, can use the same directory.`,

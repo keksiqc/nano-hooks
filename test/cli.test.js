@@ -243,15 +243,35 @@ describe("nano-hooks install / uninstall", () => {
     );
   });
 
-  it("install reports an error outside a git repository", () => {
+  it("install warns and exits 0 outside a git repository", () => {
     const r = repo();
     const result = spawnSync("node", [CLI, "install"], {
       cwd: join(r.dir, ".."),
       encoding: "utf8",
     });
 
-    expect(result.status).toBe(1);
-    expect(result.stderr).toMatch(/^× Not a git repository: /);
+    expect(result.status).toBe(0);
+    expect(result.stderr).toMatch(/^↓ Not a git repository: .+\. Hooks were not installed\.\n$/);
+  });
+
+  it("install does nothing when NANO_HOOKS=0", () => {
+    const r = repo({ ".nano-hooks.json": hooks({ "pre-commit": "echo a" }) });
+
+    const result = spawnSync("node", [CLI, "install"], {
+      cwd: r.dir,
+      encoding: "utf8",
+      env: { ...process.env, NANO_HOOKS: "0" },
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe("- Skipped install because NANO_HOOKS=0.\n");
+    expect(existsSync(join(r.dir, ".git/hooks/pre-commit"))).toBe(false);
+  });
+
+  it("install still reports an invalid config outside the skip case", () => {
+    const r = repo({ ".nano-hooks.json": "{ not json" });
+
+    expect(nano(r, "install").status).toBe(1);
   });
 });
 

@@ -14,6 +14,11 @@ const DIFF_ARGS = [
   "--submodule=short",
 ];
 
+/** Thrown when a command needs a git repository and the directory is not inside one. */
+export class NotGitRepositoryError extends Error {
+  name = "NotGitRepositoryError";
+}
+
 /**
  * Parse `git status -z` output into `{ x, y, path }` entries, where `x` and `y` are the
  * index and worktree status letters and `path` is the current path.
@@ -70,7 +75,7 @@ export function createGit(cwd = process.cwd()) {
       return { dir, external: !isInside(realPath(resolve(cwd, common)), realPath(dir)) };
     } catch (error) {
       if (/not a git repository/i.test(error.message)) {
-        throw new Error(`Not a git repository: ${cwd}`, { cause: error });
+        throw new NotGitRepositoryError(`Not a git repository: ${cwd}`, { cause: error });
       }
       throw error;
     }
