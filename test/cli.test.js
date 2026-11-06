@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
@@ -336,6 +336,15 @@ describe("nano-hooks usage", () => {
 
     expect(result.status).toBe(1);
     expect(result.stderr).toBe('× Unknown option "--nope".\n');
+  });
+
+  it.each(["--version", "-v"])("%s prints the package version", (flag) => {
+    const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url)));
+
+    const result = nano(repo(), flag);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe(`${version}\n`);
   });
 
   it("--help exits 0", () => {

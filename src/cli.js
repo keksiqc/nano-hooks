@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
 import { loadConfig } from "./config.js";
 import { NotGitRepositoryError } from "./git.js";
 import { install, runHook, uninstall } from "./hooks.js";
@@ -15,6 +16,7 @@ Commands:
 
 Options:
   -c, --config <path>  Path to a nano-hooks configuration file
+  -v, --version        Show the version
   -h, --help           Show this help
 
 Options for run:
@@ -42,6 +44,8 @@ function parseArgs(argv) {
     const arg = argv[i];
     if (arg === "-h" || arg === "--help") {
       return { command: "help", options, hookArgs };
+    } else if (arg === "-v" || arg === "--version") {
+      return { command: "version", options, hookArgs };
     } else if (arg === "-c" || arg === "--config") {
       const value = argv[++i];
       if (!value || value.startsWith("-")) throw new Error(`Option "${arg}" needs a path.`);
@@ -79,6 +83,12 @@ async function main(argv) {
 
     if (command === "help") {
       process.stdout.write(USAGE);
+      return 0;
+    }
+
+    if (command === "version") {
+      const manifest = new URL("../package.json", import.meta.url);
+      process.stdout.write(`${JSON.parse(readFileSync(manifest, "utf8")).version}\n`);
       return 0;
     }
 

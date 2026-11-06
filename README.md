@@ -74,6 +74,7 @@ If the configuration has a mistake, nano-hooks rejects it and lists every proble
 | Option                | Applies to    | Description                                               |
 | --------------------- | ------------- | --------------------------------------------------------- |
 | `-c, --config <path>` | Every command | Use this configuration file instead of searching for one. |
+| `-v, --version`       | Every command | Print the version and exit.                               |
 | `--allow-empty`       | `staged`      | Allow a commit that is empty after the tasks ran.         |
 | `--bail`              | `staged`      | Stop after the first command that fails.                  |
 
