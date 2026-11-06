@@ -39,7 +39,7 @@ nano-hooks requires Node 22, or Node 24 and later.
 
 ## Configuration
 
-nano-hooks reads its configuration from the first of these places that exists: the `nano-hooks` key in `package.json`, `.nano-hooks.json`, `.nano-hooks.js`, or `.nano-hooks.mjs`.
+nano-hooks reads its configuration from the first of these places that exists, in this order: `.nano-hooks.json`, `.nano-hooks.js`, `.nano-hooks.mjs`, and the `nano-hooks` key in `package.json`. A dedicated file wins over `package.json`. nano-hooks looks only in the directory where you run it, unless you set `--config`.
 
 All three sections are optional:
 

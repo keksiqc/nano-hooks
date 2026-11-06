@@ -1,3 +1,5 @@
+import { rmSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { VALID_HOOKS, loadConfig } from "../src/config.js";
 import { createRepo } from "./helpers.js";
@@ -41,6 +43,23 @@ describe("loadConfig", () => {
     });
 
     expect((await loadConfig(r.dir)).hooks).toEqual({ "commit-msg": "a" });
+  });
+
+  it("searches .nano-hooks.json, .nano-hooks.js, .nano-hooks.mjs, then package.json", async () => {
+    const files = {
+      ".nano-hooks.json": json({ hooks: { "pre-commit": "json" } }),
+      ".nano-hooks.js": `export default { hooks: { "pre-commit": "js" } };\n`,
+      ".nano-hooks.mjs": `export default { hooks: { "pre-commit": "mjs" } };\n`,
+      "package.json": json({ type: "module", "nano-hooks": { hooks: { "pre-commit": "pkg" } } }),
+    };
+    const order = [];
+    for (const name of Object.keys(files)) {
+      const r = repo(files);
+      for (const earlier of order) rmSync(join(r.dir, earlier));
+      order.push(name);
+      const loaded = (await loadConfig(r.dir)).hooks["pre-commit"];
+      expect(loaded).toBe(name === "package.json" ? "pkg" : name.split(".").at(-1));
+    }
   });
 
   it("loads the .nano-hooks.mjs default export, keeping function tasks", async () => {

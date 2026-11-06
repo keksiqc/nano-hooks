@@ -35,7 +35,12 @@ export const VALID_HOOKS = [
 ];
 
 const SECTIONS = new Set(["hooks", "staged", "preserveUnused"]);
-const FILES = [".nano-hooks.js", ".nano-hooks.mjs", ".nano-hooks.json"];
+/**
+ * Search order. A dedicated file wins over the `package.json` key, because it is the more
+ * specific choice. Among the dedicated files, plain data comes before code, so that a
+ * configuration that needs no code execution is found first.
+ */
+const FILES = [".nano-hooks.json", ".nano-hooks.js", ".nano-hooks.mjs"];
 
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const isCommand = (value) => typeof value === "string" && value.trim() !== "";
@@ -65,7 +70,7 @@ async function readFile(cwd, file) {
   return { file, raw };
 }
 
-/** Find the config in `cwd`: the dotfiles first, then the package.json key. */
+/** Find the config in `cwd`: the dedicated files in `FILES` order, then the package.json key. */
 async function find(cwd) {
   const name = FILES.find((file) => existsSync(join(cwd, file)));
   if (name) {
