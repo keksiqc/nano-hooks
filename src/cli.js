@@ -3,12 +3,15 @@ import { readFileSync } from "node:fs";
 import { loadConfig } from "./config.js";
 import { NotGitRepositoryError } from "./git.js";
 import { install, runHook, uninstall } from "./hooks.js";
+import { init } from "./init.js";
 import { log } from "./log.js";
 import { runStaged } from "./staged.js";
 
 const USAGE = `Usage: nano-hooks [command] [options]
 
 Commands:
+  init [command]     Add a starter configuration to package.json (default command:
+                     "<package manager> run lint") and install the hooks
   install (default)  Write the configured git hooks
   uninstall          Remove the hooks nano-hooks manages
   staged             Run commands on staged files
@@ -66,7 +69,11 @@ function parseArgs(argv) {
       throw new Error(`Unknown option "${arg}".`);
     } else {
       positional.push(arg);
-      if (positional[0] === "run" && positional.length === 2) {
+      // After `run <hook>` and after `init`, the rest is not parsed as options.
+      if (
+        (positional[0] === "run" && positional.length === 2) ||
+        (positional[0] === "init" && positional.length === 1)
+      ) {
         hookArgs = argv.slice(i + 1);
         break;
       }
@@ -85,6 +92,41 @@ function parseArgs(argv) {
   return { command, options, hook: extra[0], hookArgs };
 }
 
+/** Write the hooks and report what happened. @returns {Promise<number>} the exit code */
+async function installHooks(config) {
+  // Lets CI and container builds run `prepare` without installing hooks.
+  if (process.env.NANO_HOOKS === "0") {
+    log.info("Skipped install because NANO_HOOKS=0.");
+    return 0;
+  }
+
+  let result;
+  try {
+    result = await install({ config });
+  } catch (error) {
+    if (!(error instanceof NotGitRepositoryError)) throw error;
+    // A `prepare` script must not fail an install where there is no .git directory.
+    log.warn(`${error.message}. Hooks were not installed.`, { markup: false });
+    return 0;
+  }
+  const { installed, removed, skipped, hooksDir, external } = result;
+  if (external) {
+    log.warn(
+      `core.hooksPath points outside .git: ${hooksDir}. Another hooks manager, such as husky, can use the same directory.`,
+      { markup: false },
+    );
+  }
+  for (const name of installed) log.success(`Installed *${name}*`);
+  for (const name of removed) log.success(`Removed *${name}* (no longer configured)`);
+  for (const name of skipped) {
+    log.warn(`Skipped *${name}* because nano-hooks did not write the existing hook`);
+  }
+  if (!installed.length && !removed.length && !skipped.length) {
+    log.info("No hooks to install.");
+  }
+  return 0;
+}
+
 /** @returns {Promise<number>} the process exit code */
 async function main(argv) {
   try {
@@ -101,39 +143,16 @@ async function main(argv) {
       return 0;
     }
 
-    if (command === "install") {
-      // Lets CI and container builds run `prepare` without installing hooks.
-      if (process.env.NANO_HOOKS === "0") {
-        log.info("Skipped install because NANO_HOOKS=0.");
-        return 0;
-      }
-
-      let result;
-      try {
-        result = await install({ config: options.config });
-      } catch (error) {
-        if (!(error instanceof NotGitRepositoryError)) throw error;
-        // A `prepare` script must not fail an install where there is no .git directory.
-        log.warn(`${error.message}. Hooks were not installed.`, { markup: false });
-        return 0;
-      }
-      const { installed, removed, skipped, hooksDir, external } = result;
-      if (external) {
-        log.warn(
-          `core.hooksPath points outside .git: ${hooksDir}. Another hooks manager, such as husky, can use the same directory.`,
-          { markup: false },
-        );
-      }
-      for (const name of installed) log.success(`Installed *${name}*`);
-      for (const name of removed) log.success(`Removed *${name}* (no longer configured)`);
-      for (const name of skipped) {
-        log.warn(`Skipped *${name}* because nano-hooks did not write the existing hook`);
-      }
-      if (!installed.length && !removed.length && !skipped.length) {
-        log.info("No hooks to install.");
-      }
-      return 0;
+    if (command === "init") {
+      const { command: hookCommand, prepare } = await init({ command: hookArgs.join(" ") });
+      log.success(`Added the *nano-hooks* key to package.json`);
+      log.info(`pre-commit runs: ${hookCommand}`, { markup: false });
+      if (prepare !== "kept")
+        log.info(`The prepare script ${prepare === "added" ? "is" : "now ends with"} nano-hooks.`);
+      return await installHooks();
     }
+
+    if (command === "install") return await installHooks(options.config);
 
     // Uninstall removes whatever nano-hooks wrote, so it reads no config; --config is
     // accepted so one set of options works for every command.

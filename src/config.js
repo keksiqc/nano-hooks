@@ -74,7 +74,7 @@ async function readFile(cwd, file) {
 }
 
 /** Find the config in `cwd`: the dedicated files in `FILES` order, then the package.json key. */
-async function find(cwd) {
+export async function findConfig(cwd) {
   const name = FILES.find((file) => existsSync(join(cwd, file)));
   if (name) {
     return { file: name, raw: await read(join(cwd, name)) };
@@ -183,7 +183,7 @@ function validate(raw) {
  * }>}
  */
 export async function loadConfig(cwd = process.cwd(), { file } = {}) {
-  const found = file ? await readFile(cwd, file) : await find(cwd);
+  const found = file ? await readFile(cwd, file) : await findConfig(cwd);
   if (!found) return { hooks: {}, preserveUnused: false, options: {} };
 
   const problems = validate(found.raw);

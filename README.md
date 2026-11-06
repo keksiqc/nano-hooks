@@ -40,6 +40,8 @@ nano-hooks requires Node 22, or Node 24 and later.
 
 3. Run `pnpm install`. The `prepare` script writes the hooks to your repository.
 
+To get a starter configuration without editing `package.json` yourself, run `pnpm exec nano-hooks init` after step 1. See [`init`](#cli).
+
 ## Configuration
 
 nano-hooks reads its configuration from the first of these places that exists, in this order: `.nano-hooks.json`, `.nano-hooks.js`, `.nano-hooks.mjs`, and the `nano-hooks` key in `package.json`. A dedicated file wins over `package.json`. nano-hooks looks only in the directory where you run it, unless you set `--config`.
@@ -81,6 +83,7 @@ If the configuration has a mistake, nano-hooks rejects it and lists every proble
 
 | Command                              | Description                                 |
 | ------------------------------------ | ------------------------------------------- |
+| `nano-hooks init [command]`          | Add a starter configuration and install it. |
 | `nano-hooks` or `nano-hooks install` | Write the configured hooks.                 |
 | `nano-hooks uninstall`               | Remove the hooks that nano-hooks manages.   |
 | `nano-hooks staged`                  | Run the `staged` tasks on the staged files. |
@@ -95,6 +98,8 @@ If the configuration has a mistake, nano-hooks rejects it and lists every proble
 | `--no-concurrent`     | `staged`      | Run the patterns one after the other.                     |
 
 The `--config` option accepts a `.json`, `.js`, or `.mjs` file, or a `package.json` file. For a `package.json` file, nano-hooks reads the `nano-hooks` key. nano-hooks resolves a relative path from the directory where you run the command.
+
+The `init` command adds a `nano-hooks` key to `package.json` with a `pre-commit` hook that runs `command`. For example, `nano-hooks init pnpm run lint`. If you give no command, it uses `<package manager> run lint`. It takes the package manager from the `packageManager` field, or else from the lock file, or else it uses `npm`. Everything after `init` is the command, so options such as `--fix` go to the command and `--config` must come before `init`. The command also adds a `prepare` script that runs `nano-hooks`, or appends `&& nano-hooks` to your own `prepare` script. Then it installs the hooks. If nano-hooks is already configured, `init` stops and changes nothing. It always writes to `package.json` and ignores `--config`.
 
 The `uninstall` command does not read the configuration. It accepts `--config` but ignores it.
 
