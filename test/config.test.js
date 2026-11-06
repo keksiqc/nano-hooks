@@ -201,6 +201,13 @@ describe("hook objects", () => {
     expect(message).toContain("pre-commit.nope: unknown key (expected run, staged, ");
   });
 
+  it("rejects a staged glob that uses an extglob group", async () => {
+    const message = await problems(pre({ staged: { "!(a).js": "fmt", "*.js": "lint" } }));
+
+    expect(message).toContain('pre-commit.staged["!(a).js"]: "!(" groups are not supported');
+    expect(message).not.toContain('staged["*.js"]');
+  });
+
   it("rejects an empty staged key and one that is not an object", async () => {
     expect(await problems(pre({ staged: {} }))).toContain(
       "pre-commit.staged: must have at least one pattern",

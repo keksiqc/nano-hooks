@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, extname, join, resolve } from "node:path";
+import { globToRegex } from "./glob.js";
 
 /** Hook names from githooks(5). */
 export const VALID_HOOKS = [
@@ -133,9 +134,16 @@ const NO_COMMAND = "must be a command or a non-empty list of commands";
 function validateStaged(staged, path) {
   if (!isObject(staged)) return [`${path}: must be an object of glob pattern to command(s)`];
   if (Object.keys(staged).length === 0) return [`${path}: must have at least one pattern`];
-  return Object.entries(staged)
-    .filter(([, task]) => !isCommandList(task))
-    .map(([pattern]) => `${path}["${pattern}"]: ${NO_COMMAND}`);
+  const problems = [];
+  for (const [pattern, task] of Object.entries(staged)) {
+    if (!isCommandList(task)) problems.push(`${path}["${pattern}"]: ${NO_COMMAND}`);
+    try {
+      globToRegex(pattern);
+    } catch (error) {
+      problems.push(`${path}["${pattern}"]: ${error.message}`);
+    }
+  }
+  return problems;
 }
 
 /** The problems in one hook, as lines naming the key. */

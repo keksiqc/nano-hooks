@@ -68,7 +68,7 @@ The keys of the configuration are the names of Git hooks, and the key `options`.
 }
 ```
 
-The `pre-commit` hook is the only hook that accepts `staged` and the settings. `staged` maps a glob pattern to a command or to a list of commands. This is the nano-staged format. When the hook runs, the `staged` step runs first and the `run` commands run second. If the `staged` step fails, the `run` commands do not run.
+The `pre-commit` hook is the only hook that accepts `staged` and the settings. `staged` maps a glob pattern to a command or to a list of commands. This is the nano-staged format. Patterns support `*`, `**`, `?`, `[abc]`, `[!a-z]` and `{a,b}`. A pattern without a slash matches the file name at any depth. Groups like `!(a)` and `+(a|b)` are not supported; use braces instead. When the hook runs, the `staged` step runs first and the `run` commands run second. If the `staged` step fails, the `run` commands do not run.
 
 These settings control the `staged` step. Set them in the `pre-commit` object for one hook, or in `options` for the whole configuration. The value in the hook wins over the value in `options`, and a command line option wins over both.
 
