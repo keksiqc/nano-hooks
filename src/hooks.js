@@ -34,6 +34,14 @@ export function commandScript(command) {
     .join("\n");
 }
 
+/** Whether the directory holds anything that nano-hooks did not write. */
+export function hasForeignFiles(hooksDir) {
+  if (!existsSync(hooksDir)) return false;
+  return readdirSync(hooksDir, { withFileTypes: true }).some(
+    (entry) => !entry.isFile() || !isManaged(join(hooksDir, entry.name)),
+  );
+}
+
 export function managedHooks(hooksDir) {
   if (!existsSync(hooksDir)) return [];
   return readdirSync(hooksDir, { withFileTypes: true })
@@ -154,7 +162,7 @@ export async function installHooks(config) {
     return 0;
   }
   const { installed, removed, skipped, hooksDir, external } = result;
-  if (external) {
+  if (external && hasForeignFiles(hooksDir)) {
     log.warn(
       `core.hooksPath points outside .git: ${hooksDir}. Another hooks manager, such as husky, can use the same directory.`,
       { markup: false },

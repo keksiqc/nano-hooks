@@ -63,13 +63,17 @@ const isCommand = (value) => typeof value === "string" && value.trim() !== "";
 export const isCommandList = (value) =>
   isCommand(value) || (Array.isArray(value) && value.length > 0 && value.every(isCommand));
 
+/** The error for a file that cannot be read or parsed. */
+export const readFailure = (path, error) =>
+  new Error(`Failed to read ${path}: ${error.message}`, { cause: error });
+
 async function read(path) {
   try {
     if (!/\.[cm]?js$/.test(path)) return JSON.parse(readFileSync(path, "utf8"));
     const mod = await import(pathToFileURL(path).href);
     return mod.default ?? mod;
   } catch (error) {
-    throw new Error(`Failed to read ${path}: ${error.message}`, { cause: error });
+    throw readFailure(path, error);
   }
 }
 

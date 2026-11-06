@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { findConfig } from "../config.js";
+import { findConfig, readFailure } from "../config.js";
 import { installHooks } from "../hooks.js";
 import { log } from "../log.js";
 
@@ -41,7 +41,7 @@ export async function init({ cwd = process.cwd(), command } = {}) {
   try {
     manifest = JSON.parse(text);
   } catch (error) {
-    throw new Error(`Failed to read ${path}: ${error.message}`, { cause: error });
+    throw readFailure(path, error);
   }
 
   const hook = command?.trim() || `${detectPackageManager(projectRoot, manifest)} run lint`;

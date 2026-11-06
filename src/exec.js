@@ -26,16 +26,19 @@ function findProjectRoot(start) {
   }
 }
 
+/** A copy of `env` with the `node_modules/.bin` directory of `root` first on PATH. */
+export function envWithBin(root, env = process.env) {
+  return {
+    ...env,
+    [PATH_KEY]: [join(root, "node_modules", ".bin"), env[PATH_KEY]].filter(Boolean).join(delimiter),
+  };
+}
+
 /** The environment for a child: `node_modules/.bin` of the project comes first on PATH. */
 function childEnv(extra) {
   const env = { ...process.env, ...extra };
   const root = findProjectRoot(process.cwd());
-  if (root) {
-    env[PATH_KEY] = [join(root, "node_modules", ".bin"), env[PATH_KEY]]
-      .filter(Boolean)
-      .join(delimiter);
-  }
-  return env;
+  return root ? envWithBin(root, env) : env;
 }
 
 function isExecutable(file) {

@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
-import { delimiter, join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { VALID_HOOKS, loadConfig } from "../config.js";
+import { envWithBin } from "../exec.js";
 import { commandScript, withDefaultHooks } from "../hooks.js";
 
 /**
@@ -22,8 +23,7 @@ export async function runHook(name, args = [], { cwd = process.cwd(), config } =
   const command = (await withDefaultHooks(loaded, config))[name];
   if (!command) throw new Error(`No command configured for hook "${name}".`);
 
-  const bin = join(projectRoot, "node_modules", ".bin");
-  const env = { ...process.env, PATH: [bin, process.env.PATH].filter(Boolean).join(delimiter) };
+  const env = envWithBin(projectRoot);
 
   return new Promise((resolvePromise, reject) => {
     const child = spawn("sh", ["-c", commandScript(command), name, ...args], {

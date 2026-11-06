@@ -81,7 +81,7 @@ A hook and a `staged` pattern each accept a list of commands. The commands run o
 }
 ```
 
-In `hooks`, every command runs in a `sh` shell, gets the hook arguments as `$1`, `$2`, and so on, and the exit code of the failing command is the exit code of the hook. In `staged`, every command gets the staged files that match the pattern, and the rest of the list is skipped after a failure.
+In `hooks`, every command runs in a `sh` shell, gets the hook arguments as `$1`, `$2`, and so on, and the exit code of the failing command is the exit code of the hook. In `staged`, every command gets the staged files that match the pattern, and the rest of the list is skipped after a failure. A `staged` command does not run in a shell. nano-hooks splits it into words and quotes, then starts the program directly. Shell features such as `&&`, `|`, `$VAR` and `A=1 cmd` do not work there, and quote marks inside a word stay in the argument. To use them, write `sh -c '...'` as the command.
 
 ### Behavior
 
@@ -91,7 +91,7 @@ In `hooks`, every command runs in a `sh` shell, gets the hook arguments as `$1`,
 - To skip the installation, set `NANO_HOOKS=0`. For example: `NANO_HOOKS=0 pnpm install`. Use it in CI or in a container build where you do not need hooks.
 - If the directory is not a git repository, `install` prints a warning and exits with code 0. A `prepare` script then does not fail an install that has no `.git` directory.
 - nano-hooks never overwrites or removes a hook that it did not write. The `install` command reports these hooks and continues.
-- If `core.hooksPath` points outside `.git`, `install` writes the hooks to that directory and prints a warning. Tools such as husky set this option, so make sure that only one tool manages the directory.
+- If `core.hooksPath` points outside `.git`, `install` writes the hooks to that directory. If the directory also holds files that nano-hooks did not write, `install` prints a warning, because another tool such as husky can manage it. Make sure that only one tool manages the directory.
 - If a hook that nano-hooks wrote earlier is no longer configured, nano-hooks removes it. To keep it, set `options.preserveUnused` to `true` or list the hook name.
 
 ## CLI
@@ -108,6 +108,7 @@ In `hooks`, every command runs in a `sh` shell, gets the hook arguments as `$1`,
 | --------------------- | ------------- | --------------------------------------------------------- |
 | `-c, --config <path>` | Every command | Use this configuration file instead of searching for one. |
 | `-v, --version`       | Every command | Print the version and exit.                               |
+| `-h, --help`          | Every command | Print the help and exit.                                  |
 | `--allow-empty`       | `staged`      | Allow a commit that is empty after the tasks ran.         |
 | `--bail`              | `staged`      | Stop after the first command that fails.                  |
 | `--no-concurrent`     | `staged`      | Run the patterns one after the other.                     |
