@@ -1,6 +1,6 @@
 import { isAbsolute, normalize, relative, resolve } from "node:path";
 import { run } from "./exec.js";
-import { globToRegex } from "./glob.js";
+import { createMatcher } from "./glob.js";
 
 /** Matches a bare word, a quoted string, or a word with quoted parts, like a shell would. */
 const ARGUMENT = /([^\s'"]([^\s'"]*(['"])([^\3]*?)\3)+[^\s'"]*)|[^\s'"]+|(['"])([^\5]*?)\5/g;
@@ -108,11 +108,11 @@ export function createCommandGroups({
   const groups = [];
 
   for (const [pattern, commands] of Object.entries(config)) {
-    const matcher = globToRegex(pattern, { globstar: pattern.includes("/") });
+    const matches = createMatcher(pattern);
     const matched = relativeFiles
       .filter((file) => {
         const outside = file.startsWith("..") || isAbsolute(file);
-        return (pattern.startsWith("../") || !outside) && matcher.test(file);
+        return (pattern.startsWith("../") || !outside) && matches(file);
       })
       .map((file) => resolve(cwd, file));
 

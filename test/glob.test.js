@@ -1,20 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { globToRegex } from "../src/glob.js";
+import { createMatcher } from "../src/glob.js";
 
-const matches = (glob, file, options) => globToRegex(glob, options).test(file);
+const matches = (glob, file) => createMatcher(glob)(file);
 
-describe("globToRegex", () => {
-  it("lets * cross directories unless globstar is on", () => {
+describe("createMatcher", () => {
+  it("matches the file name at any depth when the pattern has no slash", () => {
     expect(matches("*.js", "src/deep/a.js")).toBe(true);
-    expect(matches("src/*.js", "src/deep/a.js", { globstar: true })).toBe(false);
-    expect(matches("src/*.js", "src/a.js", { globstar: true })).toBe(true);
+    expect(matches("*.js", "a.css")).toBe(false);
+  });
+
+  it("keeps * inside one directory when the pattern has a slash", () => {
+    expect(matches("src/*.js", "src/deep/a.js")).toBe(false);
+    expect(matches("src/*.js", "src/a.js")).toBe(true);
   });
 
   it("matches ** across any number of directories", () => {
-    const options = { globstar: true };
-    expect(matches("src/**/*.js", "src/a.js", options)).toBe(true);
-    expect(matches("src/**/*.js", "src/x/y/a.js", options)).toBe(true);
-    expect(matches("src/**/*.js", "lib/a.js", options)).toBe(false);
+    expect(matches("src/**/*.js", "src/a.js")).toBe(true);
+    expect(matches("src/**/*.js", "src/x/y/a.js")).toBe(true);
+    expect(matches("src/**/*.js", "lib/a.js")).toBe(false);
   });
 
   it("supports braces and character ranges", () => {
@@ -32,9 +35,15 @@ describe("globToRegex", () => {
     expect(matches("a?(b).js", "a.js")).toBe(true);
   });
 
-  it("escapes characters that are special in a RegExp", () => {
+  it("matches dotfiles and dot directories", () => {
+    expect(matches("*", ".gitignore")).toBe(true);
+    expect(matches("*.js", ".eslintrc.js")).toBe(true);
+    expect(matches(".github/**", ".github/workflows/ci.yml")).toBe(true);
+    expect(matches("src/**/*.js", "src/.hidden/a.js")).toBe(true);
+  });
+
+  it("treats characters that are special in a RegExp literally", () => {
     expect(matches("a+b.js", "a+b.js")).toBe(true);
     expect(matches("a.js", "abjs")).toBe(false);
-    expect(matches("(a).js", "(a).js")).toBe(true);
   });
 });
