@@ -114,6 +114,31 @@ describe("install", () => {
     expect(existsSync(join(r.dir, "ran"))).toBe(true);
   });
 
+  it("runs a list of commands one after the other", async () => {
+    const r = repo({ "pre-commit": ["echo 1 >> order", "echo 2 >> order; echo 3 >> order"] });
+    await install({ cwd: r.dir });
+
+    commit(r);
+
+    expect(r.read("order").split(/\s+/).filter(Boolean)).toEqual(["1", "2", "3"]);
+  });
+
+  it("stops a list at the first failing command and fails the hook", async () => {
+    const r = repo({ "pre-commit": ["echo 1 >> order", "exit 3", "echo 2 >> order"] });
+    await install({ cwd: r.dir });
+
+    expect(() => commit(r)).toThrow(/Command failed/);
+    expect(r.read("order").trim()).toBe("1");
+  });
+
+  it("stops a list when a command with || fails in its last part", async () => {
+    const r = repo({ "pre-commit": ["false || false", "touch ran"] });
+    await install({ cwd: r.dir });
+
+    expect(() => commit(r)).toThrow(/Command failed/);
+    expect(existsSync(join(r.dir, "ran"))).toBe(false);
+  });
+
   it("SKIP_NANO_HOOKS=1 skips the hook", async () => {
     const r = repo({ "pre-commit": "touch ran" });
     await install({ cwd: r.dir });

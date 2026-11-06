@@ -47,10 +47,9 @@ const FILES = [".nano-hooks.json", ".nano-hooks.js", ".nano-hooks.mjs"];
 
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const isCommand = (value) => typeof value === "string" && value.trim() !== "";
-const isTask = (value) =>
-  isCommand(value) ||
-  typeof value === "function" ||
-  (Array.isArray(value) && value.length > 0 && value.every(isCommand));
+const isCommandList = (value) =>
+  isCommand(value) || (Array.isArray(value) && value.length > 0 && value.every(isCommand));
+const isTask = (value) => typeof value === "function" || isCommandList(value);
 
 async function read(path) {
   try {
@@ -111,8 +110,8 @@ function validate(raw) {
         if (!VALID_HOOKS.includes(name)) {
           problems.push(`hooks.${name}: unknown git hook`);
           unknownHook = true;
-        } else if (!isCommand(command)) {
-          problems.push(`hooks.${name}: must be a non-empty command string`);
+        } else if (!isCommandList(command)) {
+          problems.push(`hooks.${name}: must be a command or a non-empty list of commands`);
         }
       }
     }
@@ -176,7 +175,7 @@ function validate(raw) {
  * @param {string} [cwd]
  * @param {{ file?: string }} [options]
  * @returns {Promise<{
- *   hooks: Record<string, string>,
+ *   hooks: Record<string, string | string[]>,
  *   staged?: Record<string, string | string[] | Function>,
  *   preserveUnused: boolean | string[],
  *   options: { concurrent?: boolean, bail?: boolean, allowEmpty?: boolean },

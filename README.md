@@ -50,7 +50,7 @@ All sections are optional:
 
 | Section          | Description                                                                                                                           |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `hooks`          | Maps a Git hook name to the shell command that it runs.                                                                               |
+| `hooks`          | Maps a Git hook name to a shell command, or to a list of shell commands that run one after the other.                                 |
 | `staged`         | Maps a glob pattern to a command, a list of commands, or (in a JS file) a function that returns them. This is the nano-staged format. |
 | `options`        | Settings for nano-hooks. See the table below.                                                                                         |
 | `preserveUnused` | The older form of `options.preserveUnused`. nano-hooks uses it only when `options.preserveUnused` is not set.                         |
@@ -67,6 +67,21 @@ The `options` section accepts these keys:
 A command line option wins over the same option in the configuration.
 
 If the configuration has a mistake, nano-hooks rejects it and lists every problem with the file name and the key. For example: `hooks.pre-comit: unknown git hook`.
+
+### Lists of commands
+
+A hook and a `staged` pattern each accept a list of commands. The commands run one after the other, and the first command that fails stops the list.
+
+```json
+{
+  "nano-hooks": {
+    "hooks": { "pre-push": ["pnpm run lint", "pnpm test"] },
+    "staged": { "*.js": ["prettier --write", "eslint --fix"] }
+  }
+}
+```
+
+In `hooks`, every command runs in a `sh` shell, gets the hook arguments as `$1`, `$2`, and so on, and the exit code of the failing command is the exit code of the hook. In `staged`, every command gets the staged files that match the pattern, and the rest of the list is skipped after a failure.
 
 ### Behavior
 

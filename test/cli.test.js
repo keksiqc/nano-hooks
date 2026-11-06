@@ -154,6 +154,44 @@ describe("nano-hooks staged", () => {
   });
 });
 
+/** A script that appends `name` to the file `order`. */
+const log = (name) => `require("node:fs").appendFileSync("order", "${name}");\n`;
+
+describe("lists of commands", () => {
+  it("staged runs a list in order and stops at the first failure", () => {
+    const r = repo({
+      "a.js": "one\n",
+      "one.js": log("1"),
+      "two.js": log("2"),
+      ".nano-hooks.json": JSON.stringify({ staged: { "*.js": ["node one.js", "node fail.js"] } }),
+    });
+    stage(r, "a.js", "uno\n");
+
+    expect(nano(r, "staged").status).toBe(1);
+    expect(r.read("order")).toBe("1");
+  });
+
+  it("run runs a list of hook commands and passes the arguments to each", () => {
+    const r = repo({
+      ".nano-hooks.json": JSON.stringify({
+        hooks: { "commit-msg": ['echo "first $1" >> order', 'echo "second $1" >> order'] },
+      }),
+    });
+
+    expect(nano(r, "run", "commit-msg", "msg.txt").status).toBe(0);
+    expect(r.read("order")).toBe("first msg.txt\nsecond msg.txt\n");
+  });
+
+  it("run returns the exit code of the first failing command", () => {
+    const r = repo({
+      ".nano-hooks.json": JSON.stringify({ hooks: { "pre-push": ["exit 4", "touch ran"] } }),
+    });
+
+    expect(nano(r, "run", "pre-push").status).toBe(4);
+    expect(existsSync(join(r.dir, "ran"))).toBe(false);
+  });
+});
+
 describe("nano-hooks run", () => {
   it("runs the command of the named hook", () => {
     const r = repo({

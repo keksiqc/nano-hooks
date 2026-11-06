@@ -35,6 +35,19 @@ async function relativeRoot(projectRoot) {
   }
 }
 
+/**
+ * The shell code for a hook command, or for a list of commands that run one after the
+ * other. The first command that fails stops the list and its exit code is the result.
+ * Each command but the last is in braces, so that `;` or `||` inside it cannot change
+ * where the list stops.
+ */
+function commandScript(command) {
+  if (!Array.isArray(command)) return command;
+  return command
+    .map((line, i) => (i === command.length - 1 ? line : `{ ${line}\n} || exit $?`))
+    .join("\n");
+}
+
 function script(binDir, command) {
   return [
     "#!/bin/sh",
@@ -43,7 +56,7 @@ function script(binDir, command) {
     "  exit 0",
     "fi",
     `PATH="$PWD"/${quote(binDir)}:"$PATH"`,
-    command,
+    commandScript(command),
     "",
   ].join("\n");
 }
@@ -148,7 +161,7 @@ export async function runHook(name, args = [], { cwd = process.cwd(), config } =
   const env = { ...process.env, PATH: [bin, process.env.PATH].filter(Boolean).join(delimiter) };
 
   return new Promise((resolvePromise, reject) => {
-    const child = spawn("sh", ["-c", command, name, ...args], {
+    const child = spawn("sh", ["-c", commandScript(command), name, ...args], {
       cwd: projectRoot,
       env,
       stdio: "inherit",

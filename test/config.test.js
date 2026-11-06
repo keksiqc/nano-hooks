@@ -149,6 +149,20 @@ describe("loadConfig", () => {
     expect(message).toContain("options: must be an object");
   });
 
+  it("accepts a list of commands for a hook", async () => {
+    const r = repo({
+      ".nano-hooks.json": json({ hooks: { "pre-push": ["pnpm lint", "pnpm test"] } }),
+    });
+
+    expect((await loadConfig(r.dir)).hooks).toEqual({ "pre-push": ["pnpm lint", "pnpm test"] });
+  });
+
+  it.each([[[]], [["ok", ""]], [["ok", 5]]])("rejects the hook list %j", async (list) => {
+    const message = await problems({ ".nano-hooks.json": json({ hooks: { "pre-push": list } }) });
+
+    expect(message).toContain("hooks.pre-push: must be a command or a non-empty list of commands");
+  });
+
   it("reports every problem at once with the file name and key paths", async () => {
     const message = await problems({
       ".nano-hooks.json": json({
@@ -161,7 +175,9 @@ describe("loadConfig", () => {
 
     expect(message.split("\n")[0]).toBe("Invalid nano-hooks configuration in .nano-hooks.json:");
     expect(message).toContain("hooks.pre-comit: unknown git hook");
-    expect(message).toContain("hooks.commit-msg: must be a non-empty command string");
+    expect(message).toContain(
+      "hooks.commit-msg: must be a command or a non-empty list of commands",
+    );
     expect(message).toContain("preserveUnused: must be true, false or a list of hook names");
     expect(message).toContain(
       'staged["*.js"]: must be a command, a list of commands or a function',
