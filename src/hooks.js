@@ -5,16 +5,15 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { delimiter, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { delimiter, join, relative, resolve } from "node:path";
 import { VALID_HOOKS, loadConfig } from "./config.js";
 import { createGit } from "./git.js";
 
 const MARKER = "# nano-hooks: managed file, do not edit";
-const CLI_PATH = fileURLToPath(new URL("./cli.js", import.meta.url));
 
 const quote = (value) => `'${value.replaceAll("'", `'\\''`)}'`;
 
@@ -22,14 +21,28 @@ function isManaged(path) {
   return readFileSync(path, "utf8").includes(MARKER);
 }
 
-function script(projectRoot, command) {
+/**
+ * The project directory as a path relative to the working tree root, with forward slashes,
+ * or "" when they are the same. Git runs hooks from the working tree root, so the scripts
+ * can use this instead of absolute paths and keep working when the repository moves.
+ */
+async function relativeRoot(projectRoot) {
+  try {
+    const top = await createGit(projectRoot).toplevel();
+    return relative(realpathSync(top), realpathSync(projectRoot)).replaceAll("\\", "/");
+  } catch {
+    return "";
+  }
+}
+
+function script(binDir, command) {
   return [
     "#!/bin/sh",
     MARKER,
     'if [ "${SKIP_NANO_HOOKS:-}" = "1" ]; then',
     "  exit 0",
     "fi",
-    `PATH=${quote(join(projectRoot, "node_modules", ".bin"))}:"$PATH"`,
+    `PATH="$PWD"/${quote(binDir)}:"$PATH"`,
     command,
     "",
   ].join("\n");
@@ -42,16 +55,19 @@ function managedHooks(hooksDir) {
     .map((entry) => entry.name);
 }
 
-/** The configured hook commands, plus the default `pre-commit` that runs `staged`. */
-function withDefaults(projectRoot, { hooks: configured, staged }, config) {
+/**
+ * The configured hook commands, plus the default `pre-commit` that runs `staged`.
+ * `cd` is a prefix for that default command, for hooks that start in another directory.
+ * The `nano-hooks` command comes from `node_modules/.bin`, which the hook puts on PATH.
+ * The staged config may live in a sub-package, and a custom config has to be named
+ * explicitly because hooks run later, from another directory.
+ */
+function withDefaults({ hooks: configured, staged }, config, cd = "") {
   const hooks = { ...configured };
 
   if (!hooks["pre-commit"] && staged) {
-    const runtime = process.versions.bun ? "bun" : "node";
-    // Git runs hooks from the repository root; the staged config may live in a sub-package.
-    // Hooks run later, so a custom config has to be named explicitly in the command.
-    const flag = config ? ` --config ${quote(resolve(projectRoot, config))}` : "";
-    hooks["pre-commit"] = `cd ${quote(projectRoot)} && ${runtime} ${quote(CLI_PATH)} staged${flag}`;
+    const flag = config ? ` --config ${quote(config)}` : "";
+    hooks["pre-commit"] = `${cd}nano-hooks staged${flag}`;
   }
   return hooks;
 }
@@ -69,7 +85,9 @@ export async function install({ cwd = process.cwd(), config } = {}) {
   const { dir: hooksDir, external } = await createGit(projectRoot).hooksInfo();
   const loaded = await loadConfig(projectRoot, { file: config });
   const { preserveUnused } = loaded;
-  const hooks = withDefaults(projectRoot, loaded, config);
+  const rel = await relativeRoot(projectRoot);
+  const hooks = withDefaults(loaded, config, rel ? `cd ${quote(rel)} && ` : "");
+  const binDir = join(rel, "node_modules", ".bin").replaceAll("\\", "/");
 
   mkdirSync(hooksDir, { recursive: true });
   const installed = [];
@@ -80,7 +98,7 @@ export async function install({ cwd = process.cwd(), config } = {}) {
       skipped.push(name);
       continue;
     }
-    writeFileSync(path, script(projectRoot, command), { mode: 0o755 });
+    writeFileSync(path, script(binDir, command), { mode: 0o755 });
     chmodSync(path, 0o755);
     installed.push(name);
   }
@@ -123,7 +141,7 @@ export async function runHook(name, args = [], { cwd = process.cwd(), config } =
 
   const projectRoot = resolve(cwd);
   const loaded = await loadConfig(projectRoot, { file: config });
-  const command = withDefaults(projectRoot, loaded, config)[name];
+  const command = withDefaults(loaded, config)[name];
   if (!command) throw new Error(`No command configured for hook "${name}".`);
 
   const bin = join(projectRoot, "node_modules", ".bin");

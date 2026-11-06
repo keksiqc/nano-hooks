@@ -1,7 +1,10 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const CLI = fileURLToPath(new URL("../src/cli.js", import.meta.url));
 
 export const FMT = `const fs = require("node:fs");
 for (const file of process.argv.slice(2)) {
@@ -12,6 +15,14 @@ for (const file of process.argv.slice(2)) {
 export const FAIL = `process.exit(1);\n`;
 export const RESET = `require("node:fs").writeFileSync("a.js", "x\\n");\n`;
 export const MARK = `require("node:fs").writeFileSync("marker", "1");\n`;
+
+/** Put a `nano-hooks` command in `<dir>/node_modules/.bin`, as a package manager would. */
+export function linkCli(dir) {
+  const bin = join(dir, "node_modules", ".bin");
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(join(bin, "nano-hooks"), `#!/bin/sh\nexec node '${CLI}' "$@"\n`);
+  chmodSync(join(bin, "nano-hooks"), 0o755);
+}
 
 /** Create an empty temp directory that is not a git repository. */
 export function createTempDir(dirName = "work") {
@@ -46,6 +57,8 @@ export function createRepo(files = {}, options = {}) {
   git("config", "user.email", "test@example.com");
   git("config", "commit.gpgsign", "false");
   git("config", "core.autocrlf", "false");
+  writeFileSync(join(dir, ".git", "info", "exclude"), "node_modules/\n");
+  linkCli(dir);
   for (const [path, content] of Object.entries(files)) write(path, content);
   git("add", "-A");
   git("commit", "-q", "--allow-empty", "-m", "init");

@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { install, uninstall } from "../src/hooks.js";
-import { FMT, createRepo, createTempDir } from "./helpers.js";
+import { FMT, createRepo, createTempDir, linkCli } from "./helpers.js";
 
 const cleanups = [];
 /** Repo whose nano-hooks config has the given hooks, plus any extra sections. */
@@ -48,7 +48,28 @@ describe("install", () => {
 
     await install({ cwd: r.dir });
 
-    expect(readFileSync(hookPath(r, "pre-commit"), "utf8")).toMatch(/cli\.js'? staged/);
+    expect(readFileSync(hookPath(r, "pre-commit"), "utf8")).toContain("\nnano-hooks staged\n");
+  });
+
+  it("writes no absolute paths into the scripts", async () => {
+    const r = createRepo({
+      "packages/app/.nano-hooks.json": JSON.stringify({
+        hooks: { "pre-push": "echo push" },
+        staged: { "*.js": "echo" },
+      }),
+    });
+    cleanups.push(r.cleanup);
+
+    await install({ cwd: join(r.dir, "packages/app"), config: ".nano-hooks.json" });
+
+    for (const name of ["pre-commit", "pre-push"]) {
+      const script = readFileSync(hookPath(r, name), "utf8");
+      expect(script).not.toContain(r.dir);
+      expect(script).toContain(`PATH="$PWD"/'packages/app/node_modules/.bin':"$PATH"`);
+    }
+    expect(readFileSync(hookPath(r, "pre-commit"), "utf8")).toContain(
+      "cd 'packages/app' && nano-hooks staged --config '.nano-hooks.json'",
+    );
   });
 
   it("installs from an explicit config and bakes it into the auto-wired pre-commit", async () => {
@@ -66,7 +87,7 @@ describe("install", () => {
 
     expect(result.installed.toSorted()).toEqual(["pre-commit", "pre-push"]);
     expect(readFileSync(hookPath(r, "pre-commit"), "utf8")).toContain(
-      `--config '${join(r.dir, "tools/hooks.json")}'`,
+      "nano-hooks staged --config 'tools/hooks.json'",
     );
     r.write("a.js", "uno\n");
     r.git("add", "a.js");
@@ -223,6 +244,7 @@ describe("install", () => {
       "packages/app/.nano-hooks.json": JSON.stringify({ staged: { "*.js": "node fmt.js" } }),
     });
     cleanups.push(r.cleanup);
+    linkCli(join(r.dir, "packages/app"));
     await install({ cwd: join(r.dir, "packages/app") });
     r.write("packages/app/a.js", "uno\n");
     r.git("add", "-A");

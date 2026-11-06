@@ -85,6 +85,11 @@ export function createGit(cwd = process.cwd()) {
     exec,
     hooksInfo,
 
+    /** The top-level directory of the working tree, where git runs most hooks. */
+    async toplevel() {
+      return (await exec(["rev-parse", "--show-toplevel"])).trim();
+    },
+
     async hooksDir() {
       return (await hooksInfo()).dir;
     },
