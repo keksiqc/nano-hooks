@@ -29,7 +29,12 @@ function isManaged(path) {
 async function relativeRoot(projectRoot) {
   try {
     const top = await createGit(projectRoot).toplevel();
-    return relative(realpathSync(top), realpathSync(projectRoot)).replaceAll("\\", "/");
+    // The native version also expands Windows short names such as RUNNER~1, which git does
+    // not report, so both paths have the same form.
+    return relative(realpathSync.native(top), realpathSync.native(projectRoot)).replaceAll(
+      "\\",
+      "/",
+    );
   } catch {
     return "";
   }
