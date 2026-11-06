@@ -3,6 +3,8 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { install } from "../src/commands/install.js";
+import { runHook } from "../src/commands/run.js";
+import { withDefaultHooks } from "../src/commands/staged.js";
 import { uninstall } from "../src/commands/uninstall.js";
 import { FMT, createRepo, createTempDir, linkCli } from "./helpers.js";
 
@@ -338,4 +340,90 @@ describe("uninstall", () => {
     expect(existsSync(hookPath(r, "pre-commit"))).toBe(false);
     expect(existsSync(hookPath(r, "pre-push"))).toBe(true);
   });
+});
+
+describe("default pre-commit hook", () => {
+  it("runs staged, with a quoted config file and the directory prefix when needed", () => {
+    const staged = { "*.js": "echo" };
+
+    expect(withDefaultHooks({ staged })).toEqual({ "pre-commit": "nano-hooks staged" });
+    expect(withDefaultHooks({ staged }, "it's.json", "cd 'a b' && ")).toEqual({
+      "pre-commit": "cd 'a b' && nano-hooks staged --config 'it'\\''s.json'",
+    });
+  });
+
+  it("keeps the configured hooks and an explicit pre-commit", () => {
+    const staged = { "*.js": "echo" };
+
+    expect(withDefaultHooks({ hooks: { "pre-push": "echo push" }, staged })).toEqual({
+      "pre-push": "echo push",
+      "pre-commit": "nano-hooks staged",
+    });
+    expect(withDefaultHooks({ hooks: { "pre-commit": "echo mine" }, staged }, "x.json")).toEqual({
+      "pre-commit": "echo mine",
+    });
+    expect(withDefaultHooks({ hooks: { "pre-push": "echo push" } })).toEqual({
+      "pre-push": "echo push",
+    });
+  });
+
+  // An installed hook and an immediate run use the same default.
+  const runners = {
+    "an installed hook": async (r, config) => {
+      await install({ cwd: r.dir, config });
+      commit(r);
+    },
+    "an immediate run": async (r, config) => {
+      expect(await runHook("pre-commit", [], { cwd: r.dir, config })).toBe(0);
+    },
+  };
+  // Double quotes are not allowed in Windows paths.
+  const dirName = process.platform === "win32" ? "my proj it's" : `my "proj" it's`;
+  const configFile = "it's config.json";
+
+  it.each(Object.entries(runners))(
+    "runs staged with a custom config through %s",
+    async (_, runner) => {
+      const r = createRepo(
+        {
+          "fmt.js": FMT,
+          "a.js": "one\n",
+          [configFile]: JSON.stringify({ staged: { "*.js": "node fmt.js" } }),
+        },
+        { dirName },
+      );
+      cleanups.push(r.cleanup);
+      r.write("a.js", "uno\n");
+      r.git("add", "a.js");
+
+      await runner(r, configFile);
+
+      expect(r.git("show", ":a.js")).toBe("UNO\n");
+    },
+  );
+
+  it.each(Object.entries(runners))(
+    "prefers an explicit pre-commit over staged through %s",
+    async (_, runner) => {
+      const r = createRepo(
+        {
+          "fmt.js": FMT,
+          "a.js": "one\n",
+          [configFile]: JSON.stringify({
+            hooks: { "pre-commit": "touch ran" },
+            staged: { "*.js": "node fmt.js" },
+          }),
+        },
+        { dirName },
+      );
+      cleanups.push(r.cleanup);
+      r.write("a.js", "uno\n");
+      r.git("add", "a.js");
+
+      await runner(r, configFile);
+
+      expect(existsSync(join(r.dir, "ran"))).toBe(true);
+      expect(r.git("show", ":a.js")).toBe("uno\n");
+    },
+  );
 });

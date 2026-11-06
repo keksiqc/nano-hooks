@@ -28,20 +28,3 @@ export function managedHooks(hooksDir) {
     .filter((entry) => entry.isFile() && isManaged(join(hooksDir, entry.name)))
     .map((entry) => entry.name);
 }
-
-/**
- * The configured hook commands, plus the default `pre-commit` that runs `staged`.
- * `cd` is a prefix for that default command, for hooks that start in another directory.
- * The `nano-hooks` command comes from `node_modules/.bin`, which the hook puts on PATH.
- * The staged config may live in a sub-package, and a custom config has to be named
- * explicitly because hooks run later, from another directory.
- */
-export function withDefaults({ hooks: configured, staged }, config, cd = "") {
-  const hooks = { ...configured };
-
-  if (!hooks["pre-commit"] && staged) {
-    const flag = config ? ` --config ${quote(config)}` : "";
-    hooks["pre-commit"] = `${cd}nano-hooks staged${flag}`;
-  }
-  return hooks;
-}

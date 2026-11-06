@@ -2,8 +2,9 @@ import { chmodSync, existsSync, mkdirSync, realpathSync, unlinkSync, writeFileSy
 import { join, relative, resolve } from "node:path";
 import { loadConfig } from "../config.js";
 import { NotGitRepositoryError, createGit } from "../git.js";
-import { MARKER, commandScript, isManaged, managedHooks, quote, withDefaults } from "../hooks.js";
+import { MARKER, commandScript, isManaged, managedHooks, quote } from "../hooks.js";
 import { log } from "../log.js";
+import { withDefaultHooks } from "./staged.js";
 
 /**
  * The project directory as a path relative to the working tree root, with forward slashes,
@@ -51,7 +52,7 @@ export async function install({ cwd = process.cwd(), config } = {}) {
   const loaded = await loadConfig(projectRoot, { file: config });
   const { preserveUnused } = loaded;
   const rel = await relativeRoot(projectRoot);
-  const hooks = withDefaults(loaded, config, rel ? `cd ${quote(rel)} && ` : "");
+  const hooks = withDefaultHooks(loaded, config, rel ? `cd ${quote(rel)} && ` : "");
   const binDir = join(rel, "node_modules", ".bin").replaceAll("\\", "/");
 
   mkdirSync(hooksDir, { recursive: true });

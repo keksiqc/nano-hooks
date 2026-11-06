@@ -4,6 +4,7 @@ import { styleText } from "node:util";
 import { loadConfig } from "../config.js";
 import { EmptyCommitError, runWithBackup } from "../backup.js";
 import { createGit } from "../git.js";
+import { quote } from "../hooks.js";
 import { log } from "../log.js";
 import { createRenderer } from "../renderer.js";
 import { CommandError, createCommandGroups, runCommandGroups } from "../tasks.js";
@@ -147,6 +148,27 @@ export async function runStaged({
     for (const cause of causes) report(cause, stream);
     throw error instanceof AggregateError ? new AggregateError(causes, error.message) : causes[0];
   }
+}
+
+/**
+ * The configured hook commands, plus the default `pre-commit` that runs this command when
+ * `staged` is configured and `pre-commit` is not. Installed hooks and `run` share this.
+ * `cd` is a prefix for that default command, for hooks that start in another directory.
+ * The `nano-hooks` command comes from `node_modules/.bin`, which the hook puts on PATH.
+ * The staged config may live in a sub-package, and a custom config has to be named
+ * explicitly because hooks run later, from another directory.
+ * @param {{ hooks?: Record<string, string | string[]>, staged?: object }} loaded
+ * @param {string} [config] the config file of the project, if it is not discovered
+ * @param {string} [cd]
+ */
+export function withDefaultHooks({ hooks: configured, staged }, config, cd = "") {
+  const hooks = { ...configured };
+
+  if (!hooks["pre-commit"] && staged) {
+    const flag = config ? ` --config ${quote(config)}` : "";
+    hooks["pre-commit"] = `${cd}nano-hooks staged${flag}`;
+  }
+  return hooks;
 }
 
 /** @type {import("./index.js").Command} */

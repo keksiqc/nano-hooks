@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
 import { delimiter, join, resolve } from "node:path";
 import { VALID_HOOKS, loadConfig } from "../config.js";
-import { commandScript, withDefaults } from "../hooks.js";
+import { commandScript } from "../hooks.js";
+import { withDefaultHooks } from "./staged.js";
 
 /**
  * Run the configured command of one hook now, as git would. The command runs in a `sh`
@@ -19,7 +20,7 @@ export async function runHook(name, args = [], { cwd = process.cwd(), config } =
 
   const projectRoot = resolve(cwd);
   const loaded = await loadConfig(projectRoot, { file: config });
-  const command = withDefaults(loaded, config)[name];
+  const command = withDefaultHooks(loaded, config)[name];
   if (!command) throw new Error(`No command configured for hook "${name}".`);
 
   const bin = join(projectRoot, "node_modules", ".bin");
