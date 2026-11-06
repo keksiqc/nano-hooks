@@ -42,6 +42,27 @@ describe("createMatcher", () => {
     expect(matches("src/**/*.js", "src/.hidden/a.js")).toBe(true);
   });
 
+  it("expands nested braces and numeric ranges", () => {
+    expect(matches("src/{a,b/{c,d}}.js", "src/b/d.js")).toBe(true);
+    expect(matches("src/{a,b/{c,d}}.js", "src/b/e.js")).toBe(false);
+    expect(matches("v{1..3}.js", "v2.js")).toBe(true);
+    expect(matches("v{1..3}.js", "v4.js")).toBe(false);
+    expect(matches("{a}.js", "{a}.js")).toBe(true);
+  });
+
+  it("supports + and * groups and escapes", () => {
+    expect(matches("+(a|b).js", "abab.js")).toBe(true);
+    expect(matches("*(a).js", ".js")).toBe(true);
+    expect(matches("a\\*.js", "a*.js")).toBe(true);
+    expect(matches("a\\*.js", "ab.js")).toBe(false);
+  });
+
+  it("matches a trailing ** and an unclosed bracket", () => {
+    expect(matches("src/**", "src/a/b.js")).toBe(true);
+    expect(matches("src/**", "lib/a.js")).toBe(false);
+    expect(matches("a[b.js", "a[b.js")).toBe(true);
+  });
+
   it("treats characters that are special in a RegExp literally", () => {
     expect(matches("a+b.js", "a+b.js")).toBe(true);
     expect(matches("a.js", "abjs")).toBe(false);
