@@ -1,13 +1,14 @@
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
-import { VALID_HOOKS, loadConfig } from "../config.js";
+import { VALID_HOOKS, hookParts, loadConfig } from "../config.js";
 import { envWithBin } from "../exec.js";
-import { commandScript, withDefaultHooks } from "../hooks.js";
+import { commandScript, hookSteps } from "../hooks.js";
 
 /**
- * Run the configured command of one hook now, as git would. The command runs in a `sh`
- * shell with the output shown as it happens, and `args` become its `$1`, `$2`, and so on.
- * Unlike an installed hook, it ignores `SKIP_NANO_HOOKS`.
+ * Run one hook now, as git would. The steps of the hook, such as `staged`, run first. Then
+ * the `run` commands run in a `sh` shell with the output shown as it happens, and `args`
+ * become their `$1`, `$2`, and so on. A step that fails stops the hook. Unlike an
+ * installed hook, it ignores `SKIP_NANO_HOOKS`.
  * @param {string} name a git hook name, such as `pre-commit`
  * @param {string[]} [args] arguments git would pass to that hook
  * @param {{ cwd?: string, config?: string }} [options]
@@ -20,13 +21,20 @@ export async function runHook(name, args = [], { cwd = process.cwd(), config } =
 
   const projectRoot = resolve(cwd);
   const loaded = await loadConfig(projectRoot, { file: config });
-  const command = (await withDefaultHooks(loaded, config))[name];
-  if (!command) throw new Error(`No command configured for hook "${name}".`);
+  const value = loaded.hooks[name];
+  if (value === undefined) throw new Error(`No command configured for hook "${name}".`);
+
+  for (const step of await hookSteps(name, value)) {
+    const code = await step.hookStep({ loaded, cwd: projectRoot });
+    if (code !== 0) return code;
+  }
+  const { run } = hookParts(value);
+  if (run === undefined) return 0;
 
   const env = envWithBin(projectRoot);
 
   return new Promise((resolvePromise, reject) => {
-    const child = spawn("sh", ["-c", commandScript(command), name, ...args], {
+    const child = spawn("sh", ["-c", commandScript(run), name, ...args], {
       cwd: projectRoot,
       env,
       stdio: "inherit",

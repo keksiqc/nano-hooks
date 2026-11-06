@@ -113,32 +113,15 @@ describe("runStaged", () => {
     expect(await failure(run(r))).toMatch(/No staged tasks configured/);
   });
 
-  it("supports function values", async () => {
+  it("leaves the changes of the commands out of the index with restage: false", async () => {
     const r = repo({ "a.js": "one\n" });
     r.write("a.js", "uno\n");
     r.git("add", "a.js");
-    const config = { "*.js": ({ filenames }) => ["node fmt.js " + filenames.join(" ")] };
 
-    await run(r, { config });
+    await run(r, { config: FMT_JS, restage: false });
 
-    expect(r.git("show", ":a.js")).toBe("UNO\n");
-  });
-
-  it("tells function values that the runner is staged", async () => {
-    const r = repo({ "a.js": "one\n" });
-    r.write("a.js", "uno\n");
-    r.git("add", "a.js");
-    const types = [];
-    const config = {
-      "*.js": ({ type }) => {
-        types.push(type);
-        return "node fmt.js a.js";
-      },
-    };
-
-    await run(r, { config });
-
-    expect(types).toEqual(["staged"]);
+    expect(r.git("show", ":a.js")).toBe("uno\n");
+    expect(r.read("a.js")).toBe("UNO\n");
   });
 
   it("only processes files under cwd in a sub-package", async () => {

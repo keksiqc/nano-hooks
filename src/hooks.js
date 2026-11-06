@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { loadConfig } from "./config.js";
+import { hookParts, loadConfig } from "./config.js";
 import { NotGitRepositoryError, createGit } from "./git.js";
 import { log } from "./log.js";
 
@@ -50,25 +50,42 @@ export function managedHooks(hooksDir) {
 }
 
 /**
- * The configured hook commands, plus the default hooks that commands offer through their
- * `defaultHooks` function. A configured hook always wins over a default. Installed hooks
- * and `run` share this. `cd` is a prefix for default commands, for hooks that start in
- * another directory, and `config` is the configuration file of the project, if it is not
- * discovered.
- * The command list loads on first use, because the commands import this module.
- * @param {Awaited<ReturnType<typeof loadConfig>>} loaded
+ * The commands that add a step to a hook, such as `staged` for `pre-commit`. A command adds
+ * its step when the hook in the configuration has the key of that command. The command
+ * list loads on first use, because the commands import this module.
+ * @param {string} name a git hook name
+ * @param {unknown} value the value of the hook in the configuration
+ * @returns {Promise<import("./commands/index.js").Command[]>}
+ */
+export async function hookSteps(name, value) {
+  const { commands } = await import("./commands/index.js");
+  const parts = hookParts(value);
+  return commands.filter(
+    (command) => command.hook === name && parts[command.section.name] !== undefined,
+  );
+}
+
+/**
+ * The shell code of an installed hook: one call of `nano-hooks` for each step of the hook,
+ * such as `nano-hooks staged`, and then the `run` commands as they are written. The first
+ * one that fails stops the hook. `cd` is a prefix for the calls of `nano-hooks`, for hooks
+ * that start in another directory, and `config` is the configuration file of the project,
+ * if it is not discovered. A call runs in a subshell, so that `cd` does not change where
+ * the `run` commands start.
+ * @param {string} name
+ * @param {unknown} value
  * @param {string} [config]
  * @param {string} [cd]
- * @returns {Promise<Record<string, string | string[]>>}
  */
-export async function withDefaultHooks(loaded, config, cd = "") {
-  const { commands } = await import("./commands/index.js");
-  const hooks = { ...loaded.hooks };
-  for (const command of commands) {
-    const defaults = command.defaultHooks?.(loaded, { config, cd }) ?? {};
-    for (const [name, value] of Object.entries(defaults)) hooks[name] ??= value;
-  }
-  return hooks;
+async function hookCommand(name, value, config, cd) {
+  const flag = config ? ` --config ${quote(config)}` : "";
+  // The `nano-hooks` command comes from `node_modules/.bin`, which the script puts on PATH.
+  const steps = (await hookSteps(name, value)).map((step) => {
+    const call = `${cd}nano-hooks ${step.name}${flag}`;
+    return cd ? `(${call})` : call;
+  });
+  const { run = [] } = hookParts(value);
+  return commandScript([...steps, ...[run].flat()]);
 }
 
 /**
@@ -90,7 +107,7 @@ async function relativeRoot(projectRoot) {
   }
 }
 
-function hookScript(binDir, command) {
+function hookScript(binDir, script) {
   return [
     "#!/bin/sh",
     MARKER,
@@ -98,7 +115,7 @@ function hookScript(binDir, command) {
     "  exit 0",
     "fi",
     `PATH="$PWD"/${quote(binDir)}:"$PATH"`,
-    commandScript(command),
+    script,
     "",
   ].join("\n");
 }
@@ -117,19 +134,22 @@ export async function install({ cwd = process.cwd(), config } = {}) {
   const loaded = await loadConfig(projectRoot, { file: config });
   const { preserveUnused } = loaded;
   const rel = await relativeRoot(projectRoot);
-  const hooks = await withDefaultHooks(loaded, config, rel ? `cd ${quote(rel)} && ` : "");
+  const { hooks } = loaded;
+  const cd = rel ? `cd ${quote(rel)} && ` : "";
   const binDir = join(rel, "node_modules", ".bin").replaceAll("\\", "/");
 
   mkdirSync(hooksDir, { recursive: true });
   const installed = [];
   const skipped = [];
-  for (const [name, command] of Object.entries(hooks)) {
+  for (const [name, value] of Object.entries(hooks)) {
     const path = join(hooksDir, name);
     if (existsSync(path) && !isManaged(path)) {
       skipped.push(name);
       continue;
     }
-    writeFileSync(path, hookScript(binDir, command), { mode: 0o755 });
+    writeFileSync(path, hookScript(binDir, await hookCommand(name, value, config, cd)), {
+      mode: 0o755,
+    });
     chmodSync(path, 0o755);
     installed.push(name);
   }

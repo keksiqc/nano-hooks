@@ -19,12 +19,14 @@ import { command as uninstall } from "./uninstall.js";
  * @property {string} description one or more lines for the help
  * @property {boolean} [default] runs when no command is given
  * @property {Flag[]} [flags] options that only this command accepts
- * @property {(loaded: object, context: {config?: string, cd: string}) => Record<string, string | string[]>} [defaultHooks]
- *   the hooks this command adds when the configuration does not set them, such as the
- *   default `pre-commit`. `cd` is a prefix for commands that run from another directory.
- * @property {{name: string, validate: (value: unknown) => string[]}} [section] a section of
- *   the configuration that belongs to this command. `validate` returns one line for each
- *   problem in the value.
+ * @property {string} [hook] the git hook that this command adds a step to. With `section`,
+ *   the hook object accepts the key of the section, and the true or false keys of `flags`.
+ * @property {{name: string, validate: (value: unknown, path: string) => string[]}} [section]
+ *   a key of the hook object that belongs to this command. `validate` returns one line for
+ *   each problem in the value, and `path` is the key as the user sees it, such as
+ *   `pre-commit.staged`.
+ * @property {(context: {loaded: object, cwd: string}) => number | Promise<number>} [hookStep]
+ *   runs the step of the hook, from `nano-hooks run`. It returns the exit code.
  * @property {string} [note] extra lines for the help
  * @property {number} [passthrough] accepts arguments. Option parsing stops after this many
  *   arguments, and the rest go to the command untouched.

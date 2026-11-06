@@ -109,15 +109,15 @@ describe("runCommandGroups", () => {
     expect(log).toEqual(["start a", "start b", "end a", "end b"]);
   });
 
-  it("runs the groups one after the other with concurrent: false", async () => {
+  it("runs the groups one after the other with parallel: false", async () => {
     const log = [];
 
-    await runCommandGroups(groups(log), { concurrent: false });
+    await runCommandGroups(groups(log), { parallel: false });
 
     expect(log).toEqual(["start a", "end a", "start b", "end b"]);
   });
 
-  it("skips the later groups after a failure with bail and concurrent: false", async () => {
+  it("skips the later groups after a failure with bail and parallel: false", async () => {
     const log = [];
     const [first, second] = groups(log);
     first.tasks[0].run = async () => {
@@ -125,7 +125,7 @@ describe("runCommandGroups", () => {
     };
 
     await expect(
-      runCommandGroups([first, second], { concurrent: false, bail: true }),
+      runCommandGroups([first, second], { parallel: false, bail: true }),
     ).rejects.toThrow(/boom/);
     expect(log).toEqual([]);
     expect(second.state).toBe("warn");
@@ -195,10 +195,10 @@ async function execution(output, options) {
 
 describe("task outcomes", () => {
   it.each([
-    ["concurrent groups", { concurrent: true }],
-    ["sequential groups", { concurrent: false }],
-    ["concurrent groups with bail", { concurrent: true, bail: true }],
-    ["sequential groups with bail", { concurrent: false, bail: true }],
+    ["parallel groups", { parallel: true }],
+    ["sequential groups", { parallel: false }],
+    ["parallel groups with bail", { parallel: true, bail: true }],
+    ["sequential groups with bail", { parallel: false, bail: true }],
   ])("do not depend on how the progress is drawn: %s", async (_, options) => {
     const quiet = await execution("quiet", options);
     const terminal = await execution("terminal", options);
@@ -210,7 +210,7 @@ describe("task outcomes", () => {
   });
 
   it("skips the rest of a failed command list and marks a group without files", async () => {
-    const { tasks } = await execution("log", { concurrent: false });
+    const { tasks } = await execution("log", { parallel: false });
 
     expect(tasks.map(({ title, state }) => [title, state])).toEqual([
       ["*.js", "fail"],
@@ -221,7 +221,7 @@ describe("task outcomes", () => {
   });
 
   it("cancels the later groups after a failure with bail", async () => {
-    const { tasks } = await execution("log", { concurrent: false, bail: true });
+    const { tasks } = await execution("log", { parallel: false, bail: true });
 
     expect(tasks[1].state).toBe("warn");
     expect(tasks[1].tasks.map((task) => task.state)).toEqual([undefined, undefined]);

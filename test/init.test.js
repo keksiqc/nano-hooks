@@ -17,7 +17,7 @@ describe("init", () => {
     expect(manifest(r)).toEqual({
       name: "x",
       scripts: { lint: "oxlint", prepare: "nano-hooks" },
-      "nano-hooks": { hooks: { "pre-commit": "npm run lint" } },
+      "nano-hooks": { "pre-commit": "npm run lint" },
     });
   });
 
@@ -26,7 +26,7 @@ describe("init", () => {
 
     await init({ cwd: r.dir, command: "pnpm test" });
 
-    expect(manifest(r)["nano-hooks"].hooks["pre-commit"]).toBe("pnpm test");
+    expect(manifest(r)["nano-hooks"]["pre-commit"]).toBe("pnpm test");
   });
 
   it.each([
@@ -102,7 +102,7 @@ describe("nano-hooks init", () => {
     expect(result.status).toBe(0);
     expect(result.stderr).toContain("Added the nano-hooks key to package.json");
     expect(result.stderr).toContain("Installed pre-commit");
-    expect(manifest(r)["nano-hooks"].hooks["pre-commit"]).toBe("node -e process.exit(0)");
+    expect(manifest(r)["nano-hooks"]["pre-commit"]).toBe("node -e process.exit(0)");
     expect(readFileSync(join(r.dir, ".git/hooks/pre-commit"), "utf8")).toContain(
       "node -e process.exit(0)",
     );
@@ -112,7 +112,7 @@ describe("nano-hooks init", () => {
     const r = repo({ "package.json": pkg({ name: "x" }) });
 
     expect(nano(r, "init").status).toBe(0);
-    expect(manifest(r)["nano-hooks"].hooks["pre-commit"]).toBe("npm run lint");
+    expect(manifest(r)["nano-hooks"]["pre-commit"]).toBe("npm run lint");
   });
 
   it("exits 1 and changes nothing when a configuration exists", () => {
@@ -129,6 +129,6 @@ describe("nano-hooks init", () => {
     const r = repo({ "package.json": pkg({ name: "x" }) });
 
     expect(nano(r, "init", "pnpm", "run", "lint", "--fix").status).toBe(0);
-    expect(manifest(r)["nano-hooks"].hooks["pre-commit"]).toBe("pnpm run lint --fix");
+    expect(manifest(r)["nano-hooks"]["pre-commit"]).toBe("pnpm run lint --fix");
   });
 });

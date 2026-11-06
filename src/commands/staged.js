@@ -1,10 +1,9 @@
 // The staged-file runner is based on nano-staged (MIT), see LICENSE.
 import { realpathSync } from "node:fs";
 import { styleText } from "node:util";
-import { isCommandList, isObject, loadConfig } from "../config.js";
+import { hookParts, isCommandList, isObject, loadConfig } from "../config.js";
 import { EmptyCommitError, runWithBackup } from "../backup.js";
 import { createGit } from "../git.js";
-import { quote } from "../hooks.js";
 import { log } from "../log.js";
 import { createRenderer } from "../renderer.js";
 import { CommandError, createCommandGroups, runCommandGroups } from "../tasks.js";
@@ -25,15 +24,14 @@ async function runTasks({
   cwd,
   quiet,
   bail,
-  concurrent,
+  parallel,
+  restage,
 }) {
   const groups = await createCommandGroups({
     config,
     files: files.working,
     cwd,
     rootPath: gitPaths.root,
-    // Function tasks get this, so that one configuration can serve different runners.
-    type: "staged",
   });
   if (!groups.some((group) => group.fileCount > 0)) return false;
 
@@ -44,12 +42,13 @@ async function runTasks({
   try {
     await runWithBackup({
       allowEmpty,
+      restage,
       rootPath: gitPaths.root,
       dotPath: gitPaths.dot,
       files,
       execute: {
         tasks: groups,
-        run: () => runCommandGroups(groups, { bail, concurrent }),
+        run: () => runCommandGroups(groups, { bail, parallel }),
       },
       onStep: (step) => renderer.start(step),
     });
@@ -98,12 +97,13 @@ function report(error, stream) {
  * Run commands on the staged files, as configured by glob pattern. Failures are reported to
  * `stream` and then rethrown, as an `AggregateError` when several steps failed.
  * @param {object} options
- * @param {Record<string, string | string[] | Function>} options.config glob pattern to
- * command, list of commands or function returning them
+ * @param {Record<string, string | string[]>} options.config glob pattern to command or list
+ * of commands
  * @param {string} [options.cwd] only staged files below this directory are processed
  * @param {boolean} [options.allowEmpty] allow a commit that is empty once the commands ran
  * @param {boolean} [options.bail] stop after the first failing command
- * @param {boolean} [options.concurrent] run the patterns side by side (default) or one by one
+ * @param {boolean} [options.parallel] run the patterns side by side (default) or one by one
+ * @param {boolean} [options.restage] add the changes of the commands to the commit (default)
  * @param {boolean} [options.quiet] do not draw task progress
  * @param {NodeJS.WriteStream} [options.stream] where progress and errors go, stderr by default
  */
@@ -112,14 +112,15 @@ export async function runStaged({
   cwd = process.cwd(),
   allowEmpty = false,
   bail = false,
-  concurrent = true,
+  parallel = true,
+  restage = true,
   quiet = false,
   stream = process.stderr,
 } = {}) {
   try {
     if (!config) {
       throw new Error(
-        'No staged tasks configured. Add a "staged" section to your nano-hooks configuration.',
+        'No staged tasks configured. Add "staged" to the "pre-commit" hook in your nano-hooks configuration.',
       );
     }
 
@@ -142,7 +143,8 @@ export async function runStaged({
       cwd,
       quiet,
       bail,
-      concurrent,
+      parallel,
+      restage,
     });
     if (!ran) log.info("No files match any configured task.", { stream });
   } catch (error) {
@@ -152,24 +154,42 @@ export async function runStaged({
   }
 }
 
-const isTask = (value) => typeof value === "function" || isCommandList(value);
-
-/** The problems in the `staged` section of the configuration, as lines naming the key. */
-function validateSection(staged) {
-  if (!isObject(staged)) return ["staged: must be an object of glob pattern to command(s)"];
-  if (Object.keys(staged).length === 0) return ["staged: must have at least one pattern"];
+/** The problems in the `staged` key of a hook, as lines naming the key. */
+function validateSection(staged, path) {
+  if (!isObject(staged)) return [`${path}: must be an object of glob pattern to command(s)`];
+  if (Object.keys(staged).length === 0) return [`${path}: must have at least one pattern`];
   return Object.entries(staged)
-    .filter(([, task]) => !isTask(task))
-    .map(
-      ([pattern]) => `staged["${pattern}"]: must be a command, a list of commands or a function`,
-    );
+    .filter(([, task]) => !isCommandList(task))
+    .map(([pattern]) => `${path}["${pattern}"]: must be a command or a non-empty list of commands`);
+}
+
+const HOOK = "pre-commit";
+
+/**
+ * Run the `staged` step of a hook from the configuration. The settings come from the
+ * command line first, then the hook, then the `options` section.
+ * @returns {Promise<number>} the exit code
+ */
+async function runConfigured({ loaded, flags = {}, cwd }) {
+  const hook = hookParts(loaded.hooks[HOOK]);
+  const { allowEmpty, bail, parallel, restage } = { ...loaded.options, ...hook, ...flags };
+  // Let rollback finish if the user interrupts a running commit.
+  process.on("SIGINT", () => {});
+  try {
+    await runStaged({ config: hook.staged, cwd, allowEmpty, bail, parallel, restage });
+  } catch {
+    // runStaged has already reported the errors.
+    return 1;
+  }
+  return 0;
 }
 
 /** @type {import("./index.js").Command} */
 export const command = {
   name: "staged",
+  hook: HOOK,
   section: { name: "staged", validate: validateSection },
-  description: "Run commands on staged files",
+  description: "Run the staged step of the pre-commit hook",
   flags: [
     {
       flags: ["--allow-empty"],
@@ -184,36 +204,23 @@ export const command = {
       description: "Stop after the first failing command",
     },
     {
-      flags: ["--no-concurrent"],
-      name: "concurrent",
+      flags: ["--no-parallel"],
+      name: "parallel",
       value: false,
       description: "Run the patterns one after the other",
     },
+    {
+      flags: ["--no-restage"],
+      name: "restage",
+      value: false,
+      description: "Leave the changes of the commands out of the commit",
+    },
   ],
-  // Run on the staged files in the default pre-commit hook when `staged` is configured.
-  // The `nano-hooks` command comes from `node_modules/.bin`, which the hook puts on PATH.
-  // The staged config may live in a sub-package, and a custom config has to be named
-  // explicitly because hooks run later, from another directory.
-  defaultHooks({ staged }, { config, cd }) {
-    if (!staged) return {};
-    const flag = config ? ` --config ${quote(config)}` : "";
-    return { "pre-commit": `${cd}nano-hooks staged${flag}` };
-  },
-  note: 'These options can also be set in the "options" section of the configuration.\nA command line option wins over the configuration.',
+  note: 'These options can also be set in the "pre-commit" hook or in the "options" section of\nthe configuration. A command line option wins over the configuration.',
+  // `nano-hooks run pre-commit` runs this step first, then the `run` commands.
+  hookStep: ({ loaded, cwd }) => runConfigured({ loaded, cwd }),
   async run({ options }) {
-    const { staged: tasks, options: configured } = await loadConfig(process.cwd(), {
-      file: options.config,
-    });
-    // A command line option wins over the configuration.
-    const { allowEmpty, bail, concurrent } = { ...configured, ...options };
-    // Let rollback finish if the user interrupts a running commit.
-    process.on("SIGINT", () => {});
-    try {
-      await runStaged({ config: tasks, allowEmpty, bail, concurrent });
-    } catch {
-      // runStaged has already reported the errors.
-      return 1;
-    }
-    return 0;
+    const loaded = await loadConfig(process.cwd(), { file: options.config });
+    return runConfigured({ loaded, flags: options });
   },
 };

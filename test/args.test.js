@@ -15,8 +15,8 @@ describe("parseArgs", () => {
       config: "a.json",
       bail: true,
     });
-    expect(parse("staged", "--no-concurrent", "-c", "a.json").options).toEqual({
-      concurrent: false,
+    expect(parse("staged", "--no-parallel", "-c", "a.json").options).toEqual({
+      parallel: false,
       config: "a.json",
     });
   });

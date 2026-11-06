@@ -5,12 +5,11 @@ import { describe, expect, it } from "vitest";
 import { install } from "../src/commands/install.js";
 import { runHook } from "../src/commands/run.js";
 import { uninstall } from "../src/commands/uninstall.js";
-import { withDefaultHooks } from "../src/hooks.js";
 import { FMT, linkCli, testRepo, testTempDir } from "./helpers.js";
 
-/** Repo whose nano-hooks config has the given hooks, plus any extra sections. */
+/** Repo whose nano-hooks config has the given hooks, plus any extra keys. */
 const repo = (hooks = {}, options, extra = {}) =>
-  testRepo({ ".nano-hooks.json": JSON.stringify({ hooks, ...extra }) }, options);
+  testRepo({ ".nano-hooks.json": JSON.stringify({ ...hooks, ...extra }) }, options);
 
 /** Replace the configuration of a repo made by `repo`. */
 const configure = (r, config) => r.write(".nano-hooks.json", JSON.stringify(config));
@@ -44,8 +43,8 @@ describe("install", () => {
     expect(statSync(hookPath(r, "pre-commit")).mode & 0o111).toBe(0o111);
   });
 
-  it("auto-wires pre-commit to the staged runner when a staged config exists", async () => {
-    const r = repo({}, undefined, { staged: { "*.js": "echo" } });
+  it("calls the staged command for a pre-commit hook that has staged", async () => {
+    const r = repo({ "pre-commit": { staged: { "*.js": "echo" } } });
 
     await install({ cwd: r.dir });
 
@@ -55,8 +54,8 @@ describe("install", () => {
   it("writes no absolute paths into the scripts", async () => {
     const r = testRepo({
       "packages/app/.nano-hooks.json": JSON.stringify({
-        hooks: { "pre-push": "echo push" },
-        staged: { "*.js": "echo" },
+        "pre-push": "echo push",
+        "pre-commit": { staged: { "*.js": "echo" } },
       }),
     });
 
@@ -68,17 +67,17 @@ describe("install", () => {
       expect(script).toContain(`PATH="$PWD"/'packages/app/node_modules/.bin':"$PATH"`);
     }
     expect(readFileSync(hookPath(r, "pre-commit"), "utf8")).toContain(
-      "cd 'packages/app' && nano-hooks staged --config '.nano-hooks.json'",
+      "(cd 'packages/app' && nano-hooks staged --config '.nano-hooks.json')",
     );
   });
 
-  it("installs from an explicit config and bakes it into the auto-wired pre-commit", async () => {
+  it("installs from an explicit config and bakes it into the staged call", async () => {
     const r = testRepo({
       "fmt.js": FMT,
       "a.js": "one\n",
       "tools/hooks.json": JSON.stringify({
-        hooks: { "pre-push": "echo push" },
-        staged: { "*.js": "node fmt.js" },
+        "pre-push": "echo push",
+        "pre-commit": { staged: { "*.js": "node fmt.js" } },
       }),
     });
 
@@ -92,16 +91,6 @@ describe("install", () => {
     r.git("add", "a.js");
     commit(r);
     expect(r.git("show", "HEAD:a.js")).toBe("UNO\n");
-  });
-
-  it("does not auto-wire when pre-commit is configured", async () => {
-    const r = repo({ "pre-commit": "echo mine" }, undefined, { staged: { "*.js": "echo" } });
-
-    await install({ cwd: r.dir });
-
-    const script = readFileSync(hookPath(r, "pre-commit"), "utf8");
-    expect(script).toContain("echo mine");
-    expect(script).not.toContain(" staged");
   });
 
   it("runs the hook on commit", async () => {
@@ -173,7 +162,7 @@ describe("install", () => {
   it("removes managed hooks that are no longer configured", async () => {
     const r = repo({ "pre-commit": "echo a", "commit-msg": "echo b" });
     await install({ cwd: r.dir });
-    configure(r, { hooks: { "pre-commit": "echo a" } });
+    configure(r, { "pre-commit": "echo a" });
 
     const result = await install({ cwd: r.dir });
 
@@ -182,35 +171,20 @@ describe("install", () => {
     expect(existsSync(hookPath(r, "pre-commit"))).toBe(true);
   });
 
-  it("preserveUnused: true keeps unconfigured managed hooks", async () => {
+  it("options.preserveUnused: true keeps unconfigured managed hooks", async () => {
     const r = repo({ "pre-commit": "echo a", "commit-msg": "echo b" });
     await install({ cwd: r.dir });
-    configure(r, { hooks: { "pre-commit": "echo a" }, preserveUnused: true });
+    configure(r, { "pre-commit": "echo a", options: { preserveUnused: true } });
 
     await install({ cwd: r.dir });
 
     expect(existsSync(hookPath(r, "commit-msg"))).toBe(true);
   });
 
-  it("preserveUnused: [name] keeps only that hook", async () => {
+  it("options.preserveUnused: [name] keeps only that hook", async () => {
     const r = repo({ "pre-commit": "echo a", "commit-msg": "echo b", "pre-push": "echo c" });
     await install({ cwd: r.dir });
-    configure(r, { hooks: { "pre-commit": "echo a" }, preserveUnused: ["commit-msg"] });
-
-    await install({ cwd: r.dir });
-
-    expect(existsSync(hookPath(r, "commit-msg"))).toBe(true);
-    expect(existsSync(hookPath(r, "pre-push"))).toBe(false);
-  });
-
-  it("options.preserveUnused keeps hooks and wins over the top-level key", async () => {
-    const r = repo({ "pre-commit": "echo a", "commit-msg": "echo b", "pre-push": "echo c" });
-    await install({ cwd: r.dir });
-    configure(r, {
-      hooks: { "pre-commit": "echo a" },
-      preserveUnused: true,
-      options: { preserveUnused: ["commit-msg"] },
-    });
+    configure(r, { "pre-commit": "echo a", options: { preserveUnused: ["commit-msg"] } });
 
     await install({ cwd: r.dir });
 
@@ -267,11 +241,13 @@ describe("install", () => {
     expect(existsSync(hookPath(r, "pre-commit"))).toBe(true);
   });
 
-  it("auto-wired pre-commit works when installed from a sub-package", async () => {
+  it("the pre-commit runner works when installed from a sub-package", async () => {
     const r = testRepo({
       "fmt.js": FMT,
       "packages/app/a.js": "one\n",
-      "packages/app/.nano-hooks.json": JSON.stringify({ staged: { "*.js": "node fmt.js" } }),
+      "packages/app/.nano-hooks.json": JSON.stringify({
+        "pre-commit": { staged: { "*.js": "node fmt.js" } },
+      }),
     });
     linkCli(join(r.dir, "packages/app"));
     await install({ cwd: join(r.dir, "packages/app") });
@@ -284,7 +260,7 @@ describe("install", () => {
   });
 
   it("fails loudly on a malformed config and keeps the installed hook", async () => {
-    const r = repo({}, undefined, { staged: { "*.js": "echo" } });
+    const r = repo({ "pre-commit": { staged: { "*.js": "echo" } } });
     await install({ cwd: r.dir });
     writeFileSync(join(r.dir, ".nano-hooks.json"), "{ not json");
 
@@ -324,34 +300,59 @@ describe("uninstall", () => {
   });
 });
 
-describe("default pre-commit hook", () => {
-  it("runs staged, with a quoted config file and the directory prefix when needed", async () => {
-    const staged = { "*.js": "echo" };
-
-    expect(await withDefaultHooks({ staged })).toEqual({ "pre-commit": "nano-hooks staged" });
-    expect(await withDefaultHooks({ staged }, "it's.json", "cd 'a b' && ")).toEqual({
-      "pre-commit": "cd 'a b' && nano-hooks staged --config 'it'\\''s.json'",
+describe("pre-commit with staged", () => {
+  it("calls staged, with a quoted config file and the directory prefix when needed", async () => {
+    const r = testRepo({
+      "it's dir/c.json": JSON.stringify({ "pre-commit": { staged: { "*.js": "echo" } } }),
     });
+    await install({ cwd: join(r.dir, "it's dir"), config: "c.json" });
+
+    expect(readFileSync(hookPath(r, "pre-commit"), "utf8")).toContain(
+      `\n(cd 'it'\\''s dir' && nano-hooks staged --config 'c.json')\n`,
+    );
   });
 
-  it("keeps the configured hooks and an explicit pre-commit", async () => {
-    const staged = { "*.js": "echo" };
+  it("writes the staged call first and then the run commands as they are", async () => {
+    const r = repo({ "pre-commit": { staged: { "*.js": "echo" }, run: ["echo a", "echo b $1"] } });
 
-    expect(await withDefaultHooks({ hooks: { "pre-push": "echo push" }, staged })).toEqual({
-      "pre-push": "echo push",
-      "pre-commit": "nano-hooks staged",
-    });
-    expect(
-      await withDefaultHooks({ hooks: { "pre-commit": "echo mine" }, staged }, "x.json"),
-    ).toEqual({
-      "pre-commit": "echo mine",
-    });
-    expect(await withDefaultHooks({ hooks: { "pre-push": "echo push" } })).toEqual({
-      "pre-push": "echo push",
-    });
+    await install({ cwd: r.dir });
+
+    expect(readFileSync(hookPath(r, "pre-commit"), "utf8")).toContain(
+      "{ nano-hooks staged\n} || exit $?\n{ echo a\n} || exit $?\necho b $1\n",
+    );
   });
 
-  // An installed hook and an immediate run use the same default.
+  it("starts the run commands in the repository root, also from a sub-package", async () => {
+    const r = testRepo({
+      "fmt.js": FMT,
+      "packages/app/a.js": "one\n",
+      "packages/app/.nano-hooks.json": JSON.stringify({
+        "pre-commit": { staged: { "*.js": "node fmt.js" }, run: "pwd > where" },
+      }),
+    });
+    linkCli(join(r.dir, "packages/app"));
+    await install({ cwd: join(r.dir, "packages/app") });
+    r.write("packages/app/a.js", "uno\n");
+    r.git("add", "-A");
+
+    commit(r);
+
+    expect(r.git("show", "HEAD:packages/app/a.js")).toBe("UNO\n");
+    expect(existsSync(join(r.dir, "where"))).toBe(true);
+    expect(existsSync(join(r.dir, "packages/app/where"))).toBe(false);
+  });
+
+  it("writes the commands of a hook without staged as they are", async () => {
+    const r = repo({ "pre-commit": { run: ["echo a", "echo b"] } });
+
+    await install({ cwd: r.dir });
+
+    const script = readFileSync(hookPath(r, "pre-commit"), "utf8");
+    expect(script).toContain("{ echo a\n} || exit $?\necho b");
+    expect(script).not.toContain("nano-hooks run");
+  });
+
+  // An installed hook and an immediate run do the same.
   const runners = {
     "an installed hook": async (r, config) => {
       await install({ cwd: r.dir, config });
@@ -377,9 +378,9 @@ describe("default pre-commit hook", () => {
   }
 
   it.each(Object.entries(runners))(
-    "runs staged with a custom config through %s",
+    "runs the staged step with a custom config through %s",
     async (_, runner) => {
-      const r = stagedRepo({ staged: { "*.js": "node fmt.js" } });
+      const r = stagedRepo({ "pre-commit": { staged: { "*.js": "node fmt.js" } } });
 
       await runner(r, configFile);
 
@@ -388,17 +389,19 @@ describe("default pre-commit hook", () => {
   );
 
   it.each(Object.entries(runners))(
-    "prefers an explicit pre-commit over staged through %s",
+    "runs the staged step first and then the run commands through %s",
     async (_, runner) => {
       const r = stagedRepo({
-        hooks: { "pre-commit": "touch ran" },
-        staged: { "*.js": "node fmt.js" },
+        "pre-commit": {
+          staged: { "*.js": "node fmt.js" },
+          run: "cp a.js seen",
+        },
       });
 
       await runner(r, configFile);
 
-      expect(existsSync(join(r.dir, "ran"))).toBe(true);
-      expect(r.git("show", ":a.js")).toBe("uno\n");
+      expect(r.git("show", ":a.js")).toBe("UNO\n");
+      expect(r.read("seen")).toBe("UNO\n");
     },
   );
 });

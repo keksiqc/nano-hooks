@@ -30,6 +30,8 @@ export class EmptyCommitError extends Error {
  *
  * @param {object} options
  * @param {boolean} [options.allowEmpty] allow an index without changes after the tasks
+ * @param {boolean} [options.restage] add the changes of the tasks to the index (default).
+ * With `false`, the changes stay in the working tree and the index stays as it was.
  * @param {string} options.dotPath the git directory, where the patches go
  * @param {string} options.rootPath the repository root
  * @param {{ working: string[], changed: string[], deleted: string[] }} options.files the
@@ -42,6 +44,7 @@ export class EmptyCommitError extends Error {
  */
 export async function runWithBackup({
   allowEmpty = false,
+  restage = true,
   dotPath,
   rootPath,
   files,
@@ -121,12 +124,13 @@ export async function runWithBackup({
   ok = ok && (await step("Running tasks for staged files", () => execute.run(), execute.tasks));
   ok =
     ok &&
-    (await step("Applying modifications from tasks", async () => {
-      if (!allowEmpty && !(await git.wouldChange(files.working))) {
-        throw new EmptyCommitError("The commit would be empty.");
-      }
-      await git.add(files.working);
-    }));
+    (!restage ||
+      (await step("Applying modifications from tasks", async () => {
+        if (!allowEmpty && !(await git.wouldChange(files.working))) {
+          throw new EmptyCommitError("The commit would be empty.");
+        }
+        await git.add(files.working);
+      })));
 
   let recovered;
   if (!ok) {

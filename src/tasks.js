@@ -86,21 +86,19 @@ export function chunkFiles(files, usedLength, maxLength = MAX_ARG_LENGTH) {
  * Groups without matching files get no tasks. The groups are `TaskNode`s that
  * `runCommandGroups` runs.
  * @param {object} options
- * @param {Record<string, string | string[] | Function>} options.config
+ * @param {Record<string, string | string[]>} options.config glob pattern to command or list
+ * of commands
  * @param {string[]} options.files staged files, relative to `rootPath`
  * @param {string} options.cwd only files below this directory are matched
  * @param {string} options.rootPath the repository root, where commands run
- * @param {string} [options.type] passed to function tasks, so that one configuration can
- * serve different runners
  * @param {number} [options.maxArgLength] the most characters for the files of one call;
  * a command that would exceed it runs several times on parts of the files
  */
-export async function createCommandGroups({
+export function createCommandGroups({
   config,
   files,
   cwd,
   rootPath,
-  type,
   maxArgLength = MAX_ARG_LENGTH,
 }) {
   // File paths as seen from cwd, with forward slashes.
@@ -118,10 +116,7 @@ export async function createCommandGroups({
       })
       .map((file) => resolve(cwd, file));
 
-    const isFunction = typeof commands === "function";
-    const lines = matched.length
-      ? [].concat(isFunction ? await commands({ filenames: matched, type }) : commands)
-      : [];
+    const lines = matched.length ? [].concat(commands) : [];
     const suffix = matched.length
       ? `${matched.length} ${matched.length > 1 ? "files" : "file"}`
       : "no files";
@@ -132,11 +127,8 @@ export async function createCommandGroups({
       return {
         title: line,
         pattern,
-        // A function has already chosen the arguments; a plain command gets the files, as
-        // many per call as fit in one command line.
+        // A command gets the files, as many per call as fit in one command line.
         run: async (signal) => {
-          if (isFunction) return run(command, args, { cwd: rootPath, signal });
-
           const used = [command, ...args].join(" ").length;
           for (const chunk of chunkFiles(matched, used, maxArgLength)) {
             await run(command, [...args, ...chunk], { cwd: rootPath, signal });
@@ -183,15 +175,15 @@ async function runCommands(group, signal) {
 }
 
 /**
- * Run the groups side by side, or one after the other with `concurrent: false`. With
+ * Run the groups side by side, or one after the other with `parallel: false`. With
  * `bail`, the first failing command aborts the rest. Run the groups one after the other
  * when several patterns can match the same file and a command changes files.
  * The groups and their tasks get their `state` here and nowhere else.
  * @param {TaskNode[]} groups
- * @param {{ bail?: boolean, concurrent?: boolean }} [options]
+ * @param {{ bail?: boolean, parallel?: boolean }} [options]
  * @throws {CommandError} when any command failed
  */
-export async function runCommandGroups(groups, { bail = false, concurrent = true } = {}) {
+export async function runCommandGroups(groups, { bail = false, parallel = true } = {}) {
   const controller = bail ? new AbortController() : undefined;
   const failures = [];
 
@@ -212,7 +204,7 @@ export async function runCommandGroups(groups, { bail = false, concurrent = true
     }
   };
 
-  if (concurrent) {
+  if (parallel) {
     await Promise.all(groups.map(runGroup));
   } else {
     for (const group of groups) await runGroup(group);

@@ -9,8 +9,8 @@ const stage = (r, path, content) => {
   r.git("add", path);
 };
 const fmtMap = { "*.js": "node fmt.js" };
-const hooks = (map) => JSON.stringify({ hooks: map });
-const stagedConfig = JSON.stringify({ staged: fmtMap });
+const hooks = (map) => JSON.stringify(map);
+const stagedConfig = JSON.stringify({ "pre-commit": { staged: fmtMap } });
 
 // Both patterns match a.js. The first command is slow, so it ends last when they overlap.
 const order = (options, ...args) => {
@@ -19,7 +19,7 @@ const order = (options, ...args) => {
     "slow.js": `setTimeout(() => require("node:fs").appendFileSync("order", "1"), 400);\n`,
     "fast.js": `require("node:fs").appendFileSync("order", "2");\n`,
     ".nano-hooks.json": JSON.stringify({
-      staged: { "*.js": "node slow.js", "a.*": "node fast.js" },
+      "pre-commit": { staged: { "*.js": "node slow.js", "a.*": "node fast.js" } },
       options,
     }),
   });
@@ -35,11 +35,11 @@ const secondPatternRuns = (...args) => {
     "a.js": "one\n",
     "mark.js": `require("node:fs").writeFileSync("marker", "1");\n`,
     ".nano-hooks.json": JSON.stringify({
-      staged: { "*.js": "node fail.js", "a.*": "node mark.js" },
+      "pre-commit": { staged: { "*.js": "node fail.js", "a.*": "node mark.js" } },
     }),
   });
   stage(r, "a.js", "uno\n");
-  expect(nano(r, "staged", "--no-concurrent", ...args).status).toBe(1);
+  expect(nano(r, "staged", "--no-parallel", ...args).status).toBe(1);
   return existsSync(join(r.dir, "marker"));
 };
 
@@ -66,7 +66,7 @@ describe("nano-hooks staged", () => {
   it("exits 1 when a command fails", () => {
     const r = repo({
       "a.js": "one\n",
-      ".nano-hooks.json": JSON.stringify({ staged: { "*.js": "node fail.js" } }),
+      ".nano-hooks.json": JSON.stringify({ "pre-commit": { staged: { "*.js": "node fail.js" } } }),
     });
     stage(r, "a.js", "uno\n");
 
@@ -89,14 +89,14 @@ describe("nano-hooks staged", () => {
   });
 
   it("exits 1 and lists the problems when the config is invalid", () => {
-    const r = repo({ "a.js": "one\n", ".nano-hooks.json": JSON.stringify({ "pre-commit": "x" }) });
+    const r = repo({ "a.js": "one\n", ".nano-hooks.json": JSON.stringify({ "pre-comit": "x" }) });
     stage(r, "a.js", "uno\n");
 
     const result = nano(r, "staged");
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("× Invalid nano-hooks configuration in .nano-hooks.json:");
-    expect(result.stderr).toContain("pre-commit");
+    expect(result.stderr).toContain("pre-comit: unknown key");
   });
 
   it("--config points at a specific nano-hooks config file", () => {
@@ -110,7 +110,7 @@ describe("nano-hooks staged", () => {
   it("--allow-empty lets an emptied commit through", () => {
     const r = repo({
       "a.js": "x\n",
-      ".nano-hooks.json": JSON.stringify({ staged: { "*.js": "node reset.js" } }),
+      ".nano-hooks.json": JSON.stringify({ "pre-commit": { staged: { "*.js": "node reset.js" } } }),
     });
     stage(r, "a.js", "y\n");
 
@@ -122,7 +122,7 @@ describe("nano-hooks staged", () => {
     const r = repo({
       "a.js": "x\n",
       ".nano-hooks.json": JSON.stringify({
-        staged: { "*.js": "node reset.js" },
+        "pre-commit": { staged: { "*.js": "node reset.js" } },
         options: { allowEmpty: true },
       }),
     });
@@ -131,21 +131,21 @@ describe("nano-hooks staged", () => {
     expect(nano(r, "staged").status).toBe(0);
   });
 
-  describe("concurrent patterns", () => {
+  describe("parallel patterns", () => {
     it("run side by side by default", () => {
       expect(order({})).toBe("21");
     });
 
-    it("run one after the other with options.concurrent: false", () => {
-      expect(order({ concurrent: false })).toBe("12");
+    it("run one after the other with options.parallel: false", () => {
+      expect(order({ parallel: false })).toBe("12");
     });
 
-    it("run one after the other with --no-concurrent", () => {
-      expect(order({}, "--no-concurrent")).toBe("12");
+    it("run one after the other with --no-parallel", () => {
+      expect(order({}, "--no-parallel")).toBe("12");
     });
 
-    it("--no-concurrent wins over options.concurrent: true", () => {
-      expect(order({ concurrent: true }, "--no-concurrent")).toBe("12");
+    it("--no-parallel wins over options.parallel: true", () => {
+      expect(order({ parallel: true }, "--no-parallel")).toBe("12");
     });
   });
 
@@ -160,6 +160,164 @@ describe("nano-hooks staged", () => {
   });
 });
 
+const stagedFiles = { "*.js": "node reset.js" };
+const emptied = (config, ...args) => {
+  const r = repo({ "a.js": "x\n", ".nano-hooks.json": JSON.stringify(config) });
+  stage(r, "a.js", "y\n");
+  return nano(r, "staged", ...args).status;
+};
+
+describe("settings of the pre-commit hook", () => {
+  it("allowEmpty in the hook lets an emptied commit through", () => {
+    expect(emptied({ "pre-commit": { staged: stagedFiles } })).toBe(1);
+    expect(emptied({ "pre-commit": { staged: stagedFiles, allowEmpty: true } })).toBe(0);
+  });
+
+  it("a setting in the hook wins over options", () => {
+    const hook = { staged: stagedFiles, allowEmpty: false };
+
+    expect(emptied({ options: { allowEmpty: true }, "pre-commit": hook })).toBe(1);
+  });
+
+  it("a command line option wins over the hook", () => {
+    const config = { "pre-commit": { staged: stagedFiles, allowEmpty: false } };
+
+    expect(emptied(config, "--allow-empty")).toBe(0);
+  });
+
+  it("parallel: false in the hook runs the patterns one after the other", () => {
+    const r = repo({
+      "a.js": "one\n",
+      "slow.js": `setTimeout(() => require("node:fs").appendFileSync("order", "1"), 400);\n`,
+      "fast.js": `require("node:fs").appendFileSync("order", "2");\n`,
+      ".nano-hooks.json": JSON.stringify({
+        "pre-commit": {
+          staged: { "*.js": "node slow.js", "a.*": "node fast.js" },
+          parallel: false,
+        },
+      }),
+    });
+    stage(r, "a.js", "uno\n");
+
+    expect(nano(r, "staged").status).toBe(0);
+    expect(r.read("order")).toBe("12");
+  });
+
+  it("restage: false in the hook leaves the changes of the commands out of the commit", () => {
+    const r = repo({
+      "a.js": "one\n",
+      ".nano-hooks.json": JSON.stringify({
+        "pre-commit": { staged: fmtMap, restage: false },
+      }),
+    });
+    stage(r, "a.js", "uno\n");
+
+    expect(nano(r, "staged").status).toBe(0);
+    expect(r.git("show", ":a.js")).toBe("uno\n");
+    expect(r.read("a.js")).toBe("UNO\n");
+  });
+
+  it("--no-restage wins over options.restage", () => {
+    const r = repo({
+      "a.js": "one\n",
+      ".nano-hooks.json": JSON.stringify({
+        "pre-commit": { staged: fmtMap },
+        options: { restage: true },
+      }),
+    });
+    stage(r, "a.js", "uno\n");
+
+    expect(nano(r, "staged", "--no-restage").status).toBe(0);
+    expect(r.git("show", ":a.js")).toBe("uno\n");
+  });
+
+  it("staged fails clearly when the pre-commit hook has no staged key", () => {
+    const r = repo({ ".nano-hooks.json": JSON.stringify({ "pre-commit": "echo a" }) });
+
+    const result = nano(r, "staged");
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("No staged tasks configured");
+  });
+});
+
+const commands = (extra) =>
+  JSON.stringify({ "pre-commit": { staged: fmtMap, run: "cp a.js seen", ...extra } });
+
+describe("nano-hooks run with a pre-commit object", () => {
+  it("runs the staged step before the run commands", () => {
+    const r = repo({ "a.js": "one\n", ".nano-hooks.json": commands() });
+    stage(r, "a.js", "uno\n");
+
+    expect(nano(r, "run", "pre-commit").status).toBe(0);
+    expect(r.read("seen")).toBe("UNO\n");
+  });
+
+  it("does not run the commands when the staged step fails", () => {
+    const r = repo({
+      "a.js": "one\n",
+      ".nano-hooks.json": JSON.stringify({
+        "pre-commit": { staged: { "*.js": "node fail.js" }, run: "touch ran" },
+      }),
+    });
+    stage(r, "a.js", "uno\n");
+
+    expect(nano(r, "run", "pre-commit").status).toBe(1);
+    expect(existsSync(join(r.dir, "ran"))).toBe(false);
+  });
+
+  it("returns the exit code of the run commands", () => {
+    const r = repo({
+      "a.js": "one\n",
+      ".nano-hooks.json": commands({ run: "exit 5" }),
+    });
+    stage(r, "a.js", "uno\n");
+
+    expect(nano(r, "run", "pre-commit").status).toBe(5);
+  });
+
+  it("runs only the run commands when nothing is staged", () => {
+    const r = repo({ "a.js": "one\n", ".nano-hooks.json": commands({ run: "touch ran" }) });
+
+    expect(nano(r, "run", "pre-commit").status).toBe(0);
+    expect(existsSync(join(r.dir, "ran"))).toBe(true);
+  });
+
+  it("a commit runs both through the installed hook", () => {
+    const r = repo({ "a.js": "one\n", ".nano-hooks.json": commands() });
+    expect(nano(r, "install").status).toBe(0);
+    stage(r, "a.js", "uno\n");
+
+    r.git("commit", "-q", "-m", "x");
+
+    expect(r.git("show", "HEAD:a.js")).toBe("UNO\n");
+    expect(r.read("seen")).toBe("UNO\n");
+  });
+});
+
+describe("old configuration", () => {
+  it("is rejected with a hint, and install keeps the hooks that exist", () => {
+    const r = repo({ ".nano-hooks.json": JSON.stringify({ "pre-commit": "echo a" }) });
+    expect(nano(r, "install").status).toBe(0);
+    r.write(".nano-hooks.json", JSON.stringify({ hooks: { "pre-commit": "echo a" } }));
+
+    const result = nano(r, "install");
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("hooks: removed. Put each hook at the top level");
+    expect(existsSync(join(r.dir, ".git/hooks/pre-commit"))).toBe(true);
+  });
+
+  it("is rejected when it is a .nano-hooks.mjs file", () => {
+    const r = repo({ ".nano-hooks.mjs": "export default {};\n" });
+
+    const result = nano(r, "install");
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Found .nano-hooks.mjs. nano-hooks reads only JSON");
+  });
+});
+
 /** A script that appends `name` to the file `order`. */
 const appendScript = (name) => `require("node:fs").appendFileSync("order", "${name}");\n`;
 
@@ -168,7 +326,9 @@ describe("lists of commands", () => {
     const r = repo({
       "a.js": "one\n",
       "one.js": appendScript("1"),
-      ".nano-hooks.json": JSON.stringify({ staged: { "*.js": ["node one.js", "node fail.js"] } }),
+      ".nano-hooks.json": JSON.stringify({
+        "pre-commit": { staged: { "*.js": ["node one.js", "node fail.js"] } },
+      }),
     });
     stage(r, "a.js", "uno\n");
 
@@ -179,7 +339,7 @@ describe("lists of commands", () => {
   it("run runs a list of hook commands and passes the arguments to each", () => {
     const r = repo({
       ".nano-hooks.json": JSON.stringify({
-        hooks: { "commit-msg": ['echo "first $1" >> order', 'echo "second $1" >> order'] },
+        "commit-msg": ['echo "first $1" >> order', 'echo "second $1" >> order'],
       }),
     });
 
@@ -189,7 +349,7 @@ describe("lists of commands", () => {
 
   it("run returns the exit code of the first failing command", () => {
     const r = repo({
-      ".nano-hooks.json": JSON.stringify({ hooks: { "pre-push": ["exit 4", "touch ran"] } }),
+      ".nano-hooks.json": JSON.stringify({ "pre-push": ["exit 4", "touch ran"] }),
     });
 
     expect(nano(r, "run", "pre-push").status).toBe(4);
@@ -237,7 +397,7 @@ describe("nano-hooks run", () => {
     expect(nano(r, "run", "--config", "custom.json", "pre-push").stdout).toBe("custom\n");
   });
 
-  it("runs the staged runner for pre-commit when only staged is set", () => {
+  it("runs the staged step of a pre-commit object", () => {
     const r = repo({ "a.js": "one\n", ".nano-hooks.json": stagedConfig });
     stage(r, "a.js", "uno\n");
 
@@ -271,7 +431,7 @@ describe("nano-hooks run", () => {
 
 describe("nano-hooks install / uninstall", () => {
   it("install writes hooks and uninstall removes them", () => {
-    const r = repo({ ".nano-hooks.json": JSON.stringify({ hooks: { "pre-commit": "echo a" } }) });
+    const r = repo({ ".nano-hooks.json": JSON.stringify({ "pre-commit": "echo a" }) });
     const hook = join(r.dir, ".git/hooks/pre-commit");
 
     const installed = nano(r);
@@ -307,13 +467,13 @@ describe("nano-hooks install / uninstall", () => {
   });
 
   it("install reports an invalid config in the same style", () => {
-    const r = repo({ ".nano-hooks.json": JSON.stringify({ hooks: { "pre-comit": "x" } }) });
+    const r = repo({ ".nano-hooks.json": JSON.stringify({ "pre-comit": "x" }) });
 
     const result = nano(r, "install");
 
     expect(result.status).toBe(1);
     expect(result.stderr).toMatch(/^× Invalid nano-hooks configuration in \.nano-hooks\.json:\n/);
-    expect(result.stderr).toContain("hooks.pre-comit: unknown git hook");
+    expect(result.stderr).toContain("pre-comit: unknown key");
   });
 
   it("says so when there is nothing to install or uninstall", () => {
@@ -324,9 +484,9 @@ describe("nano-hooks install / uninstall", () => {
   });
 
   it("reports removed and skipped hooks in the same style", () => {
-    const r = repo({ ".nano-hooks.json": JSON.stringify({ hooks: { "pre-commit": "echo a" } }) });
+    const r = repo({ ".nano-hooks.json": JSON.stringify({ "pre-commit": "echo a" }) });
     nano(r, "install");
-    r.write(".nano-hooks.json", JSON.stringify({ hooks: { "pre-push": "echo b" } }));
+    r.write(".nano-hooks.json", JSON.stringify({ "pre-push": "echo b" }));
     r.write(".git/hooks/pre-push", "#!/bin/sh\necho mine\n");
 
     const result = nano(r, "install");
@@ -363,7 +523,7 @@ describe("nano-hooks install / uninstall", () => {
 });
 
 describe("nano-hooks --config", () => {
-  const custom = JSON.stringify({ hooks: { "pre-push": "echo a" } });
+  const custom = JSON.stringify({ "pre-push": "echo a" });
 
   it("install -c reads hooks from that file", () => {
     const r = repo({ "custom.json": custom });
@@ -446,7 +606,7 @@ describe("end to end", () => {
   it("a commit runs the staged runner through the installed hook", () => {
     const r = repo({
       "a.js": "one\n",
-      "package.json": JSON.stringify({ "nano-hooks": { staged: fmtMap } }),
+      "package.json": JSON.stringify({ "nano-hooks": { "pre-commit": { staged: fmtMap } } }),
     });
     expect(nano(r, "install").status).toBe(0);
     stage(r, "a.js", "uno\n");

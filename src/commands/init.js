@@ -31,7 +31,7 @@ export async function init({ cwd = process.cwd(), command } = {}) {
   const path = join(projectRoot, "package.json");
   if (!existsSync(path)) throw new Error(`No package.json found in ${projectRoot}.`);
 
-  const existing = await findConfig(projectRoot);
+  const existing = findConfig(projectRoot);
   if (existing) {
     throw new Error(`nano-hooks is already configured in ${existing.file}. Nothing changed.`);
   }
@@ -55,7 +55,7 @@ export async function init({ cwd = process.cwd(), command } = {}) {
     prepare = "appended";
   }
 
-  const updated = { ...manifest, scripts, "nano-hooks": { hooks: { "pre-commit": hook } } };
+  const updated = { ...manifest, scripts, "nano-hooks": { "pre-commit": hook } };
   // Keep the indentation and the final newline of the file.
   const indent = /^[ \t]+(?=")/m.exec(text)?.[0] ?? 2;
   writeFileSync(path, `${JSON.stringify(updated, null, indent)}${text.endsWith("\n") ? "\n" : ""}`);

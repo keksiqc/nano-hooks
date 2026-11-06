@@ -12,7 +12,7 @@ it("builds the help text from the command table", () => {
                          "<package manager> run lint") and install the hooks
       install (default)  Write the configured git hooks
       uninstall          Remove the hooks nano-hooks manages
-      staged             Run commands on staged files
+      staged             Run the staged step of the pre-commit hook
       run <hook> [args]  Run the configured command of one git hook now
 
     Options:
@@ -21,12 +21,13 @@ it("builds the help text from the command table", () => {
       -h, --help           Show this help
 
     Options for staged:
-      --allow-empty    Allow empty commits
-      --bail           Stop after the first failing command
-      --no-concurrent  Run the patterns one after the other
+      --allow-empty  Allow empty commits
+      --bail         Stop after the first failing command
+      --no-parallel  Run the patterns one after the other
+      --no-restage   Leave the changes of the commands out of the commit
 
-      These options can also be set in the "options" section of the configuration.
-      A command line option wins over the configuration.
+      These options can also be set in the "pre-commit" hook or in the "options" section of
+      the configuration. A command line option wins over the configuration.
 
     Options for run:
       Arguments after <hook> go to the hook command as $1, $2 and so on, so put
