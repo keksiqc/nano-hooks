@@ -33,13 +33,13 @@ describe("parseArgs", () => {
     expect(parse("init", "pnpm", "run", "--fix").args).toEqual(["pnpm", "run", "--fix"]);
   });
 
-  it("returns the help and version commands as soon as it sees their option", () => {
-    expect(parse("staged", "-h").command.name).toBe("help");
-    expect(parse("-v", "--nope").command.name).toBe("version");
+  it("returns the help and version actions as soon as it sees their option", () => {
+    expect(parse("staged", "-h").action).toBe("help");
+    expect(parse("-v", "--nope").action).toBe("version");
   });
 
   it("returns help over an unknown command, as before", () => {
-    expect(parse("frobnicate", "-h").command.name).toBe("help");
+    expect(parse("frobnicate", "-h").action).toBe("help");
   });
 
   it("gives a shared spelling the meaning of the chosen command", () => {

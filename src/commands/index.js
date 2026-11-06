@@ -22,7 +22,7 @@ import { command as uninstall } from "./uninstall.js";
  * @property {string} [note] extra lines for the help
  * @property {number} [passthrough] accepts arguments. Option parsing stops after this many
  *   arguments, and the rest go to the command untouched.
- * @property {(context: {options: Record<string, unknown>, args: string[], usage: string}) => number | Promise<number>} run
+ * @property {(context: {options: Record<string, unknown>, args: string[]}) => number | Promise<number>} run
  *   returns the exit code. An error it throws is reported and exits with 1.
  */
 

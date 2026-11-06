@@ -9,7 +9,8 @@
 
 ## CLI structure
 
-- `src/cli.js` only parses the arguments and runs one command. Each command is one file in
+- `src/cli.js` only parses the arguments and runs one command, or prints the help or the
+  version for the `--help` and `--version` options. Each command is one file in
   `src/commands/` that holds its code and exports a `command` object. The list is in
   `src/commands/index.js`. The help text and the option checks are built from that list, so a
   new command only needs its own file, one line in `src/commands/index.js` and its README

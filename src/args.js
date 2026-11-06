@@ -1,9 +1,6 @@
-import { help } from "./commands/help.js";
-import { version } from "./commands/version.js";
-
 /**
- * Options every command accepts. One with a `command` ends the parsing and runs that
- * command. One with an `arg` takes a value and sets `options[name]`.
+ * Options every command accepts. One with an `action` ends the parsing, and the CLI does
+ * that action (`help` or `version`). One with an `arg` takes a value and sets `options[name]`.
  */
 export const GLOBAL_OPTIONS = [
   {
@@ -12,8 +9,8 @@ export const GLOBAL_OPTIONS = [
     name: "config",
     description: "Path to a nano-hooks configuration file",
   },
-  { flags: ["-v", "--version"], command: version, description: version.description },
-  { flags: ["-h", "--help"], command: help, description: help.description },
+  { flags: ["-v", "--version"], action: "version", description: "Show the version" },
+  { flags: ["-h", "--help"], action: "help", description: "Show this help" },
 ];
 
 const spells = (option, arg) => option.flags.includes(arg);
@@ -25,8 +22,9 @@ const spells = (option, arg) => option.flags.includes(arg);
  *
  * @param {string[]} argv
  * @param {import("./commands/index.js").Command[]} commands
- * @returns {{command?: import("./commands/index.js").Command, name?: string, options: Record<string, unknown>, args: string[]}}
- *   `name` is set instead of `command` when the command is unknown
+ * @returns {{action?: "help" | "version", command?: import("./commands/index.js").Command, name?: string, options: Record<string, unknown>, args: string[]}}
+ *   `action` is set instead of `command` for a help or version option, and `name` is set
+ *   instead of `command` when the command is unknown
  */
 export function parseArgs(argv, commands) {
   const options = {};
@@ -39,7 +37,7 @@ export function parseArgs(argv, commands) {
     const arg = argv[i];
     const global = GLOBAL_OPTIONS.find((option) => spells(option, arg));
 
-    if (global?.command) return { command: global.command, options, args: [] };
+    if (global?.action) return { action: global.action, options, args: [] };
     if (global) {
       const value = argv[++i];
       if (!value || value.startsWith("-")) {
