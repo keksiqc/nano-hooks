@@ -122,9 +122,9 @@ export async function runWithBackup({
   ok =
     ok &&
     (await step("Applying modifications from tasks", async () => {
-      // Before the first commit there is no HEAD to diff against.
-      const diff = await git.exec(["diff", "HEAD"]).catch(() => git.exec(["diff", "--cached"]));
-      if (!diff && !allowEmpty) throw new EmptyCommitError("The commit would be empty.");
+      if (!allowEmpty && !(await git.wouldChange(files.working))) {
+        throw new EmptyCommitError("The commit would be empty.");
+      }
       await git.add(files.working);
     }));
 

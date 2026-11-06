@@ -1,4 +1,4 @@
-import { realpathSync } from "node:fs";
+import { copyFileSync, existsSync, realpathSync, rmSync } from "node:fs";
 import { basename, dirname, isAbsolute, normalize, relative, resolve, sep } from "node:path";
 import { run } from "./exec.js";
 
@@ -127,6 +127,24 @@ export function createGit(cwd = process.cwd()) {
 
     async add(paths) {
       if (paths.length) await exec(["add", "-A", "--", ...paths]);
+    },
+
+    /**
+     * Whether adding `paths` would leave the index different from HEAD. Only the index counts:
+     * unstaged changes to other files do not. The check runs on a copy of the index, so the
+     * real index stays as it is.
+     */
+    async wouldChange(paths) {
+      const index = resolve(cwd, (await exec(["rev-parse", "--git-path", "index"])).trim());
+      const copy = `${index}.nano-hooks-check`;
+      const env = { GIT_INDEX_FILE: copy };
+      try {
+        if (existsSync(index)) copyFileSync(index, copy);
+        if (paths.length) await exec(["add", "-A", "--", ...paths], { env });
+        return (await exec(["diff", "--cached", "--name-only"], { env })).trim() !== "";
+      } finally {
+        rmSync(copy, { force: true });
+      }
     },
 
     async checkout(paths) {

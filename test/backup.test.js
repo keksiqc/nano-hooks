@@ -219,4 +219,31 @@ describe("runWithBackup", () => {
     const second = await work(r, reset, { allowEmpty: true });
     await second.promise;
   });
+
+  it("ignores unrelated unstaged changes when it checks for an empty commit", async () => {
+    const r = repo({ "a.js": "x\n", "b.js": "keep\n" });
+    r.write("a.js", "y\n");
+    r.git("add", "a.js");
+    r.write("b.js", "unrelated unstaged edit\n");
+    const reset = async () => r.write("a.js", "x\n");
+
+    const { promise } = await work(r, reset);
+
+    expect((await errorsOf(promise))[0].message).toContain("The commit would be empty");
+    expect(r.git("show", ":a.js")).toBe("y\n");
+    expect(r.read("b.js")).toBe("unrelated unstaged edit\n");
+  });
+
+  it("still sees the staged deletion of another file as a change", async () => {
+    const r = repo({ "a.js": "x\n", "b.js": "keep\n" });
+    r.write("a.js", "y\n");
+    r.git("add", "a.js");
+    r.git("rm", "-q", "b.js");
+    const reset = async () => r.write("a.js", "x\n");
+
+    const { promise } = await work(r, reset);
+    await promise;
+
+    expect(r.git("diff", "--cached", "--name-status").trim()).toBe("D\tb.js");
+  });
 });
