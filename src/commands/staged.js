@@ -44,97 +44,54 @@ async function runTasks({
   });
   const modified = [...files.changed, ...files.deleted];
 
-  // The backup is the safety net: without it nothing else runs.
-  let backupFailed = false;
-  let rollback = false;
-  let cleanUp = true;
-
-  const steps = [
-    {
-      title: "Preparing nano-hooks",
-      run: async () => {
-        try {
-          await workflow.backupOriginalState();
-        } catch (error) {
-          backupFailed = true;
-          throw error;
-        }
-      },
-    },
-    {
-      title: "Backing up unstaged changes for staged files",
-      skip: () => backupFailed || modified.length === 0,
-      run: async () => {
-        try {
-          await workflow.backupUnstagedFiles(modified);
-        } catch (error) {
-          rollback = true;
-          throw error;
-        }
-      },
-    },
-    {
-      title: "Running tasks for staged files",
-      skip: () => backupFailed || rollback,
-      run: async (task) => {
-        task.tasks = groups;
-        try {
-          await runCommandGroups(task, groups, { bail, concurrent });
-        } catch (error) {
-          rollback = true;
-          throw error;
-        }
-      },
-    },
-    {
-      title: "Applying modifications from tasks",
-      skip: () => backupFailed || rollback,
-      run: async () => {
-        try {
-          await workflow.applyModifications(files.working);
-        } catch (error) {
-          rollback = true;
-          throw error;
-        }
-      },
-    },
-    {
-      title: "Restoring unstaged changes for staged files",
-      skip: () => backupFailed || rollback || modified.length === 0,
-      run: () => workflow.restoreUnstagedFiles(modified),
-    },
-    {
-      title: "Restoring to original state because of errors",
-      skip: () => backupFailed || !rollback,
-      run: async () => {
-        try {
-          await workflow.restoreOriginalState();
-        } catch (error) {
-          cleanUp = false;
-          throw error;
-        }
-      },
-    },
-    {
-      title: "Cleaning up temporary patch files",
-      skip: () => backupFailed || !cleanUp,
-      run: () => workflow.cleanUp(),
-    },
-  ];
-
   const errors = [];
-  for (const step of steps) {
-    if (step.skip?.()) continue;
-
-    renderer.start(step);
-    step.state = "run";
+  /** Run one step, show it, and record its error. @returns {Promise<boolean>} true if it worked */
+  const step = async (title, run) => {
+    const task = { title, state: "run" };
+    renderer.start(task);
     try {
-      await step.run(step);
-      step.state = "done";
+      await run(task);
+      task.state = "done";
+      return true;
     } catch (error) {
-      step.state = "fail";
+      task.state = "fail";
       errors.push(error);
+      return false;
     }
+  };
+
+  // The backup is the safety net: without it nothing else runs.
+  if (await step("Preparing nano-hooks", () => workflow.backupOriginalState())) {
+    // Each step runs only if the steps before it worked. A failure restores the original state.
+    let ok = true;
+    if (modified.length) {
+      ok = await step("Backing up unstaged changes for staged files", () =>
+        workflow.backupUnstagedFiles(modified),
+      );
+    }
+    ok =
+      ok &&
+      (await step("Running tasks for staged files", (task) => {
+        task.tasks = groups;
+        return runCommandGroups(task, groups, { bail, concurrent });
+      }));
+    ok =
+      ok &&
+      (await step("Applying modifications from tasks", () =>
+        workflow.applyModifications(files.working),
+      ));
+
+    let cleanUp = true;
+    if (!ok) {
+      cleanUp = await step("Restoring to original state because of errors", () =>
+        workflow.restoreOriginalState(),
+      );
+    } else if (modified.length) {
+      await step("Restoring unstaged changes for staged files", () =>
+        workflow.restoreUnstagedFiles(modified),
+      );
+    }
+    if (cleanUp) await step("Cleaning up temporary patch files", () => workflow.cleanUp());
   }
   renderer.stop();
 
