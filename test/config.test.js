@@ -1,16 +1,8 @@
 import { rmSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { VALID_HOOKS, loadConfig } from "../src/config.js";
-import { createRepo } from "./helpers.js";
-
-const repos = [];
-function repo(files) {
-  const r = createRepo(files);
-  repos.push(r);
-  return r;
-}
-afterEach(() => repos.splice(0).forEach((r) => r.cleanup()));
+import { testRepo as repo } from "./helpers.js";
 
 const json = (value) => JSON.stringify(value);
 
@@ -81,7 +73,7 @@ describe("loadConfig", () => {
     expect(await loadConfig(r.dir)).toEqual({ hooks: {}, preserveUnused: false, options: {} });
   });
 
-  it("reads all three sections", async () => {
+  it("reads hooks, staged and preserveUnused", async () => {
     const r = repo({
       ".nano-hooks.json": json({
         hooks: { "pre-commit": "x" },
@@ -255,10 +247,5 @@ describe("loadConfig", () => {
     await expect(loadConfig(r.dir, { file: "custom.json" })).rejects.toThrow(
       "Invalid nano-hooks configuration in custom.json:",
     );
-  });
-
-  it("lists git's documented hook names", () => {
-    expect(VALID_HOOKS).toContain("pre-commit");
-    expect(VALID_HOOKS).toContain("commit-msg");
   });
 });

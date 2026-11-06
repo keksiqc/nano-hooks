@@ -1,24 +1,11 @@
-import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { init } from "../src/commands/init.js";
-import { createRepo, createTempDir } from "./helpers.js";
-
-const CLI = fileURLToPath(new URL("../src/cli.js", import.meta.url));
-
-const repos = [];
-function repo(files) {
-  const r = createRepo(files);
-  repos.push(r);
-  return r;
-}
-afterEach(() => repos.splice(0).forEach((r) => r.cleanup()));
+import { nano, testRepo as repo, testTempDir } from "./helpers.js";
 
 const pkg = (value, indent = 2) => `${JSON.stringify(value, null, indent)}\n`;
 const manifest = (r) => JSON.parse(r.read("package.json"));
-const nano = (r, ...args) => spawnSync("node", [CLI, ...args], { cwd: r.dir, encoding: "utf8" });
 
 describe("init", () => {
   it("adds a pre-commit hook and a prepare script", async () => {
@@ -94,10 +81,9 @@ describe("init", () => {
   });
 
   it("needs a package.json", async () => {
-    const t = createTempDir();
+    const t = testTempDir();
 
     await expect(init({ cwd: t.dir })).rejects.toThrow(/No package\.json found/);
-    t.cleanup();
   });
 
   it("reports a package.json that is not valid JSON", async () => {

@@ -1,20 +1,15 @@
 import { existsSync, readFileSync, symlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { PassThrough } from "node:stream";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { runStaged } from "../src/commands/staged.js";
-import { FAIL, FMT, MARK, RESET, createRepo, createTempDir } from "./helpers.js";
+import { FAIL, FMT, MARK, RESET, testRepo, testTempDir } from "./helpers.js";
 
-const repos = [];
-function repo(files, options) {
-  const r = createRepo(
+const repo = (files, options) =>
+  testRepo(
     { "fmt.js": FMT, "fail.js": FAIL, "reset.js": RESET, "mark.js": MARK, ...files },
     options,
   );
-  repos.push(r);
-  return r;
-}
-afterEach(() => repos.splice(0).forEach((r) => r.cleanup()));
 
 function run(r, options = {}) {
   return runStaged({ cwd: r.dir, quiet: true, stream: new PassThrough(), ...options });
@@ -245,12 +240,8 @@ describe("runStaged conflicts and bad configs", () => {
   });
 
   it("rejects outside a git repository", async () => {
-    const { dir, cleanup } = createTempDir();
+    const { dir } = testTempDir();
 
-    try {
-      expect(await failure(run({ dir }, { config: FMT_JS }))).toContain("Not a git repository");
-    } finally {
-      cleanup();
-    }
+    expect(await failure(run({ dir }, { config: FMT_JS }))).toContain("Not a git repository");
   });
 });

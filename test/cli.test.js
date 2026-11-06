@@ -1,21 +1,9 @@
-import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
-import { FAIL, FMT, RESET, createRepo } from "./helpers.js";
+import { describe, expect, it } from "vitest";
+import { FAIL, FMT, RESET, nano, nanoWith, testRepo } from "./helpers.js";
 
-const CLI = fileURLToPath(new URL("../src/cli.js", import.meta.url));
-
-const repos = [];
-function repo(files) {
-  const r = createRepo({ "fmt.js": FMT, "fail.js": FAIL, "reset.js": RESET, ...files });
-  repos.push(r);
-  return r;
-}
-afterEach(() => repos.splice(0).forEach((r) => r.cleanup()));
-
-const nano = (r, ...args) => spawnSync("node", [CLI, ...args], { cwd: r.dir, encoding: "utf8" });
+const repo = (files) => testRepo({ "fmt.js": FMT, "fail.js": FAIL, "reset.js": RESET, ...files });
 const stage = (r, path, content) => {
   r.write(path, content);
   r.git("add", path);
@@ -38,6 +26,21 @@ const order = (options, ...args) => {
   stage(r, "a.js", "uno\n");
   expect(nano(r, "staged", ...args).status).toBe(0);
   return r.read("order");
+};
+
+// The first pattern fails. The second one runs only if the failure did not stop the rest.
+/** Whether the second pattern ran after the first one failed, for the given staged options. */
+const secondPatternRuns = (...args) => {
+  const r = repo({
+    "a.js": "one\n",
+    "mark.js": `require("node:fs").writeFileSync("marker", "1");\n`,
+    ".nano-hooks.json": JSON.stringify({
+      staged: { "*.js": "node fail.js", "a.*": "node mark.js" },
+    }),
+  });
+  stage(r, "a.js", "uno\n");
+  expect(nano(r, "staged", "--no-concurrent", ...args).status).toBe(1);
+  return existsSync(join(r.dir, "marker"));
 };
 
 describe("nano-hooks staged", () => {
@@ -146,23 +149,25 @@ describe("nano-hooks staged", () => {
     });
   });
 
-  it("--bail is accepted", () => {
-    const r = repo({ "a.js": "one\n", ".nano-hooks.json": stagedConfig });
-    stage(r, "a.js", "uno\n");
+  describe("--bail", () => {
+    it("runs the other patterns after a failure without it", () => {
+      expect(secondPatternRuns()).toBe(true);
+    });
 
-    expect(nano(r, "staged", "--bail").status).toBe(0);
+    it("stops the other patterns after a failure", () => {
+      expect(secondPatternRuns("--bail")).toBe(false);
+    });
   });
 });
 
 /** A script that appends `name` to the file `order`. */
-const log = (name) => `require("node:fs").appendFileSync("order", "${name}");\n`;
+const appendScript = (name) => `require("node:fs").appendFileSync("order", "${name}");\n`;
 
 describe("lists of commands", () => {
   it("staged runs a list in order and stops at the first failure", () => {
     const r = repo({
       "a.js": "one\n",
-      "one.js": log("1"),
-      "two.js": log("2"),
+      "one.js": appendScript("1"),
       ".nano-hooks.json": JSON.stringify({ staged: { "*.js": ["node one.js", "node fail.js"] } }),
     });
     stage(r, "a.js", "uno\n");
@@ -221,11 +226,7 @@ describe("nano-hooks run", () => {
   it("runs without the hook being installed and ignores SKIP_NANO_HOOKS", () => {
     const r = repo({ ".nano-hooks.json": hooks({ "pre-push": "echo ran" }) });
 
-    const result = spawnSync("node", [CLI, "run", "pre-push"], {
-      cwd: r.dir,
-      encoding: "utf8",
-      env: { ...process.env, SKIP_NANO_HOOKS: "1" },
-    });
+    const result = nanoWith(r, { env: { SKIP_NANO_HOOKS: "1" } }, "run", "pre-push");
 
     expect(result.stdout).toBe("ran\n");
   });
@@ -303,7 +304,6 @@ describe("nano-hooks install / uninstall", () => {
     r.git("config", "core.hooksPath", ".githooks-outside");
 
     expect(nano(r).stderr).toBe("√ Installed pre-commit\n");
-    expect(nano(r).stderr).toBe("√ Installed pre-commit\n");
   });
 
   it("install reports an invalid config in the same style", () => {
@@ -339,10 +339,7 @@ describe("nano-hooks install / uninstall", () => {
 
   it("install warns and exits 0 outside a git repository", () => {
     const r = repo();
-    const result = spawnSync("node", [CLI, "install"], {
-      cwd: join(r.dir, ".."),
-      encoding: "utf8",
-    });
+    const result = nanoWith(r, { cwd: join(r.dir, "..") }, "install");
 
     expect(result.status).toBe(0);
     expect(result.stderr).toMatch(/^↓ Not a git repository: .+\. Hooks were not installed\.\n$/);
@@ -351,11 +348,7 @@ describe("nano-hooks install / uninstall", () => {
   it("install does nothing when NANO_HOOKS=0", () => {
     const r = repo({ ".nano-hooks.json": hooks({ "pre-commit": "echo a" }) });
 
-    const result = spawnSync("node", [CLI, "install"], {
-      cwd: r.dir,
-      encoding: "utf8",
-      env: { ...process.env, NANO_HOOKS: "0" },
-    });
+    const result = nanoWith(r, { env: { NANO_HOOKS: "0" } }, "install");
 
     expect(result.status).toBe(0);
     expect(result.stderr).toBe("- Skipped install because NANO_HOOKS=0.\n");

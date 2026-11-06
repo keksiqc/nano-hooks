@@ -1,10 +1,11 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { onTestFinished } from "vitest";
 
-const CLI = fileURLToPath(new URL("../src/cli.js", import.meta.url));
+export const CLI = fileURLToPath(new URL("../src/cli.js", import.meta.url));
 
 export const FMT = `const fs = require("node:fs");
 for (const file of process.argv.slice(2)) {
@@ -64,4 +65,31 @@ export function createRepo(files = {}, options = {}) {
   git("commit", "-q", "--allow-empty", "-m", "init");
 
   return { dir, git, write, read: (path) => readFileSync(join(dir, path), "utf8"), cleanup };
+}
+
+/** Like `createRepo`, and the repository is removed when the test ends. Call it in a test. */
+export function testRepo(files, options) {
+  const r = createRepo(files, options);
+  onTestFinished(r.cleanup);
+  return r;
+}
+
+/** Like `createTempDir`, and the directory is removed when the test ends. Call it in a test. */
+export function testTempDir(dirName) {
+  const t = createTempDir(dirName);
+  onTestFinished(t.cleanup);
+  return t;
+}
+
+/** Run the nano-hooks CLI in the repository and return the `spawnSync` result. */
+export const nano = (r, ...args) => nanoWith(r, {}, ...args);
+
+/** Like `nano`, with `spawnSync` options such as `cwd` or `env`. `env` adds to the environment. */
+export function nanoWith(r, { env, ...options }, ...args) {
+  return spawnSync("node", [CLI, ...args], {
+    cwd: r.dir,
+    encoding: "utf8",
+    ...options,
+    env: { ...process.env, ...env },
+  });
 }

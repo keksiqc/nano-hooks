@@ -1,17 +1,11 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { runWithBackup } from "../src/backup.js";
 import { createGit } from "../src/git.js";
-import { FMT, createRepo } from "./helpers.js";
+import { FMT, testRepo } from "./helpers.js";
 
-const repos = [];
-function repo(files) {
-  const r = createRepo({ "fmt.js": FMT, ...files });
-  repos.push(r);
-  return r;
-}
-afterEach(() => repos.splice(0).forEach((r) => r.cleanup()));
+const repo = (files) => testRepo({ "fmt.js": FMT, ...files });
 
 const patchPaths = (r) => ({
   original: join(r.dir, ".git", "nano-hooks.patch"),

@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createRenderer } from "../src/renderer.js";
 import {
   CommandError,
@@ -9,7 +9,7 @@ import {
   runCommandGroups,
   splitCommand,
 } from "../src/tasks.js";
-import { createTempDir } from "./helpers.js";
+import { testTempDir } from "./helpers.js";
 
 describe("splitCommand", () => {
   it("splits on whitespace", () => {
@@ -52,21 +52,17 @@ describe("chunkFiles", () => {
 /** The file counts of the calls that `count.js` recorded. */
 const calls = (dir) => readFileSync(join(dir, "calls.log"), "utf8").trim().split("\n").map(Number);
 
+/** A command that appends the number of files it received to `calls.log`. */
+function setup() {
+  const t = testTempDir();
+  writeFileSync(
+    join(t.dir, "count.js"),
+    `require("node:fs").appendFileSync("calls.log", process.argv.length - 2 + "\\n");\n`,
+  );
+  return t.dir;
+}
+
 describe("createCommandGroups", () => {
-  const cleanups = [];
-  afterEach(() => cleanups.splice(0).forEach((fn) => fn()));
-
-  /** A command that appends the number of files it received to `calls.log`. */
-  function setup() {
-    const t = createTempDir();
-    cleanups.push(t.cleanup);
-    writeFileSync(
-      join(t.dir, "count.js"),
-      `require("node:fs").appendFileSync("calls.log", process.argv.length - 2 + "\\n");\n`,
-    );
-    return t.dir;
-  }
-
   it("runs a command once per chunk of files", async () => {
     const dir = setup();
     const files = ["a.js", "b.js", "c.js", "d.js", "e.js"];
