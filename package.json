@@ -34,14 +34,14 @@
   "devDependencies": {
     "bumpp": "^12.3.0",
     "nano-hooks": "link:",
-    "oxfmt": "^0.75.0",
-    "oxlint": "^1.90.0",
-    "vitest": "^5.0.5"
+    "oxfmt": "^0.76.0",
+    "oxlint": "^1.91.0",
+    "vitest": "^5.1.0"
   },
   "engines": {
     "node": "^22 || >=24"
   },
-  "packageManager": "pnpm@12.16.1",
+  "packageManager": "pnpm@12.18.0",
   "nano-hooks": {
     "pre-commit": {
       "staged": {
