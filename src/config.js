@@ -33,16 +33,13 @@ export const VALID_HOOKS = [
   "post-index-change",
 ];
 
-/**
- * What the configuration accepts besides the hooks. The commands add to it: each flag of a
- * command is a true or false key of `options`, and a command can add a step to one hook,
- * with a key of its own and settings in that hook.
- * @param {import("./commands/index.js").Command[]} commands
- */
-function schema(commands) {
-  const flags = [...new Set(commands.flatMap((command) => command.flags ?? []).map((f) => f.name))];
-  return { commands, optionNames: [...flags, "preserveUnused"] };
-}
+/** The hook that has the `staged` step. */
+export const STAGED_HOOK = "pre-commit";
+
+/** The true or false settings of the `staged` step. Each one is a flag of `nano-hooks staged`. */
+export const SETTINGS = ["allowEmpty", "bail", "parallel", "restage"];
+
+const OPTIONS = [...SETTINGS, "preserveUnused"];
 
 /** The JSON files to search for, after the `nano-hooks` key of `package.json`. */
 const FILES = ["nano-hooks.config.json", ".nano-hooks.json"];
@@ -67,6 +64,10 @@ export function hookParts(value) {
   if (value === undefined) return {};
   return isObject(value) ? value : { run: value };
 }
+
+/** Whether a hook has the `staged` step, which only the `pre-commit` hook can have. */
+export const hasStaged = (name, value) =>
+  name === STAGED_HOOK && hookParts(value).staged !== undefined;
 
 /** The error for a file that cannot be read or parsed. */
 export const readFailure = (path, error) =>
@@ -128,61 +129,58 @@ export function findConfig(cwd) {
 
 const NO_COMMAND = "must be a command or a non-empty list of commands";
 
-/** What a command adds to one hook: its own key, and its settings. */
-const extensionKeys = (command) => [
-  command.section.name,
-  ...(command.flags ?? []).map((f) => f.name),
-];
+/** The problems in the `staged` key of a hook, as lines naming the key. */
+function validateStaged(staged, path) {
+  if (!isObject(staged)) return [`${path}: must be an object of glob pattern to command(s)`];
+  if (Object.keys(staged).length === 0) return [`${path}: must have at least one pattern`];
+  return Object.entries(staged)
+    .filter(([, task]) => !isCommandList(task))
+    .map(([pattern]) => `${path}["${pattern}"]: ${NO_COMMAND}`);
+}
 
 /** The problems in one hook, as lines naming the key. */
-function validateHook(name, value, commands) {
+function validateHook(name, value) {
   if (isCommandList(value)) return [];
   if (!isObject(value)) return [`${name}: must be a command, a list of commands or an object`];
 
-  const extensions = commands.filter((command) => command.hook === name && command.section);
-  const allowed = ["run", ...extensions.flatMap(extensionKeys)];
+  const staged = name === STAGED_HOOK;
+  const allowed = staged ? ["run", "staged", ...SETTINGS] : ["run"];
   const problems = [];
 
   for (const [key, entry] of Object.entries(value)) {
     const path = `${name}.${key}`;
-    const owner = commands.find(
-      (command) => command.hook && command.section && extensionKeys(command).includes(key),
-    );
-    const section = extensions.find((command) => command.section.name === key);
     if (key === "run") {
       if (!isCommandList(entry)) problems.push(`${path}: ${NO_COMMAND}`);
-    } else if (section) {
-      problems.push(...section.section.validate(entry, path));
-    } else if (extensions.some((command) => extensionKeys(command).includes(key))) {
+    } else if (staged && key === "staged") {
+      problems.push(...validateStaged(entry, path));
+    } else if (staged && SETTINGS.includes(key)) {
       if (typeof entry !== "boolean") problems.push(`${path}: must be true or false`);
-    } else if (owner) {
-      problems.push(`${path}: only the "${owner.hook}" hook accepts this key`);
+    } else if (key === "staged" || SETTINGS.includes(key)) {
+      problems.push(`${path}: only the "${STAGED_HOOK}" hook accepts this key`);
     } else {
       problems.push(`${path}: unknown key (expected ${allowed.join(", ")})`);
     }
   }
 
-  const needed = ["run", ...extensions.map((command) => command.section.name)];
-  if (!needed.some((key) => key in value)) {
-    problems.push(`${name}: needs ${needed.map((key) => `"${key}"`).join(" or ")}`);
+  if (!("run" in value) && !(staged && "staged" in value)) {
+    problems.push(`${name}: needs ${staged ? '"run" or "staged"' : '"run"'}`);
   }
   return problems;
 }
 
 /** The hint for a top-level key that version 0.4 read, or nothing for any other key. */
-function migrationHint(key, commands) {
+function migrationHint(key) {
   if (key === "hooks") {
     return 'hooks: removed. Put each hook at the top level, for example "pre-commit": "pnpm lint". See MIGRATION.md.';
   }
   if (key === "preserveUnused") return "preserveUnused: moved to options.preserveUnused";
-  const owner = commands.find((command) => command.hook && command.section?.name === key);
-  if (owner) {
-    return `${key}: moved into the "${owner.hook}" hook, as in "${owner.hook}": { "${key}": ... }. See MIGRATION.md.`;
+  if (key === "staged") {
+    return `staged: moved into the "${STAGED_HOOK}" hook, as in "${STAGED_HOOK}": { "staged": ... }. See MIGRATION.md.`;
   }
 }
 
 /** Collect every problem in the config, as lines naming the offending key. */
-function validate(raw, { commands, optionNames }) {
+function validate(raw) {
   if (!isObject(raw)) return ["configuration must be an object"];
 
   const problems = [];
@@ -191,9 +189,9 @@ function validate(raw, { commands, optionNames }) {
   for (const [key, value] of Object.entries(raw)) {
     if (key === "options") continue;
     if (VALID_HOOKS.includes(key)) {
-      problems.push(...validateHook(key, value, commands));
-    } else if (migrationHint(key, commands)) {
-      problems.push(migrationHint(key, commands));
+      problems.push(...validateHook(key, value));
+    } else if (migrationHint(key)) {
+      problems.push(migrationHint(key));
     } else {
       problems.push(`${key}: unknown key (expected a git hook name or options)`);
       unknownHook = true;
@@ -205,8 +203,8 @@ function validate(raw, { commands, optionNames }) {
       problems.push("options: must be an object");
     } else {
       for (const [name, value] of Object.entries(raw.options)) {
-        if (!optionNames.includes(name)) {
-          problems.push(`options.${name}: unknown option (expected ${optionNames.join(", ")})`);
+        if (!OPTIONS.includes(name)) {
+          problems.push(`options.${name}: unknown option (expected ${OPTIONS.join(", ")})`);
         } else if (name === "preserveUnused") {
           if (typeof value === "boolean") continue;
           if (!Array.isArray(value)) {
@@ -243,12 +241,10 @@ function validate(raw, { commands, optionNames }) {
  * `hookParts` to read one.
  */
 export async function loadConfig(cwd = process.cwd(), { file } = {}) {
-  // The commands import this module, so their list loads on first use.
-  const { commands } = await import("./commands/index.js");
   const found = file ? readFile(cwd, file) : findConfig(cwd);
   if (!found) return { hooks: {}, preserveUnused: false, options: {} };
 
-  const problems = validate(found.raw, schema(commands));
+  const problems = validate(found.raw);
   if (problems.length) {
     const lines = problems.map((problem) => `  ${problem}`);
     throw new Error([`Invalid nano-hooks configuration in ${found.file}:`, ...lines].join("\n"));

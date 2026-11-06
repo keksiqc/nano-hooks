@@ -154,7 +154,7 @@ pnpm fmt
 pnpm test
 ```
 
-The `pnpm install` command runs `prepare`, which installs the pre-commit hook of this repository. The hook runs `nano-hooks run pre-commit`. This command formats staged files with `pnpm run fmt` and lints staged JavaScript files with `pnpm run lint`.
+The `pnpm install` command runs `prepare`, which installs the pre-commit hook of this repository. The hook runs `nano-hooks staged`, which formats staged files with `pnpm run fmt` and lints staged JavaScript files with `pnpm run lint`. Then it runs `pnpm run test`. The `pre-push` hook also runs `pnpm run test`.
 
 CI uses the Unit Test workflow from [`sxzz/workflows`](https://github.com/sxzz/workflows). The file is `.github/workflows/ci.yml`. It runs on each push and pull request to `main`. It runs `pnpm run lint` once on Linux. It runs `pnpm run test` on Ubuntu and Windows with Node 22, 24, and 26. CI does not check formatting, so run `pnpm fmt` before you push.
 

@@ -1,7 +1,7 @@
 // The staged-file runner is based on nano-staged (MIT), see LICENSE.
 import { realpathSync } from "node:fs";
 import { styleText } from "node:util";
-import { hookParts, isCommandList, isObject, loadConfig } from "../config.js";
+import { STAGED_HOOK, hookParts } from "../config.js";
 import { EmptyCommitError, runWithBackup } from "../backup.js";
 import { createGit } from "../git.js";
 import { log } from "../log.js";
@@ -154,24 +154,17 @@ export async function runStaged({
   }
 }
 
-/** The problems in the `staged` key of a hook, as lines naming the key. */
-function validateSection(staged, path) {
-  if (!isObject(staged)) return [`${path}: must be an object of glob pattern to command(s)`];
-  if (Object.keys(staged).length === 0) return [`${path}: must have at least one pattern`];
-  return Object.entries(staged)
-    .filter(([, task]) => !isCommandList(task))
-    .map(([pattern]) => `${path}["${pattern}"]: must be a command or a non-empty list of commands`);
-}
-
-const HOOK = "pre-commit";
-
 /**
- * Run the `staged` step of a hook from the configuration. The settings come from the
- * command line first, then the hook, then the `options` section.
+ * Run the `staged` step of the `pre-commit` hook from the configuration. The settings come
+ * from `flags` first, then the hook, then the `options` section.
+ * @param {object} options
+ * @param {Awaited<ReturnType<typeof loadConfig>>} options.loaded
+ * @param {Record<string, unknown>} [options.flags] settings from the command line
+ * @param {string} [options.cwd]
  * @returns {Promise<number>} the exit code
  */
-async function runConfigured({ loaded, flags = {}, cwd }) {
-  const hook = hookParts(loaded.hooks[HOOK]);
+export async function runConfiguredStaged({ loaded, flags = {}, cwd }) {
+  const hook = hookParts(loaded.hooks[STAGED_HOOK]);
   const { allowEmpty, bail, parallel, restage } = { ...loaded.options, ...hook, ...flags };
   // Let rollback finish if the user interrupts a running commit.
   process.on("SIGINT", () => {});
@@ -183,44 +176,3 @@ async function runConfigured({ loaded, flags = {}, cwd }) {
   }
   return 0;
 }
-
-/** @type {import("./index.js").Command} */
-export const command = {
-  name: "staged",
-  hook: HOOK,
-  section: { name: "staged", validate: validateSection },
-  description: "Run the staged step of the pre-commit hook",
-  flags: [
-    {
-      flags: ["--allow-empty"],
-      name: "allowEmpty",
-      value: true,
-      description: "Allow empty commits",
-    },
-    {
-      flags: ["--bail"],
-      name: "bail",
-      value: true,
-      description: "Stop after the first failing command",
-    },
-    {
-      flags: ["--no-parallel"],
-      name: "parallel",
-      value: false,
-      description: "Run the patterns one after the other",
-    },
-    {
-      flags: ["--no-restage"],
-      name: "restage",
-      value: false,
-      description: "Leave the changes of the commands out of the commit",
-    },
-  ],
-  note: 'These options can also be set in the "pre-commit" hook or in the "options" section of\nthe configuration. A command line option wins over the configuration.',
-  // `nano-hooks run pre-commit` runs this step first, then the `run` commands.
-  hookStep: ({ loaded, cwd }) => runConfigured({ loaded, cwd }),
-  async run({ options }) {
-    const loaded = await loadConfig(process.cwd(), { file: options.config });
-    return runConfigured({ loaded, flags: options });
-  },
-};

@@ -2,9 +2,9 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { install } from "../src/commands/install.js";
 import { runHook } from "../src/commands/run.js";
 import { uninstall } from "../src/commands/uninstall.js";
+import { install } from "../src/hooks.js";
 import { FMT, linkCli, testRepo, testTempDir } from "./helpers.js";
 
 /** Repo whose nano-hooks config has the given hooks, plus any extra keys. */

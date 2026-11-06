@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { parseArgs } from "../src/args.js";
-import { commands } from "../src/commands/index.js";
+import { COMMANDS, STAGED_OPTIONS, parseArgs } from "../src/args.js";
+import { SETTINGS } from "../src/config.js";
+import { HELP } from "../src/help.js";
 
-const parse = (...argv) => parseArgs(argv, commands);
-const run = () => 0;
+const parse = (...argv) => parseArgs(argv);
 
 describe("parseArgs", () => {
   it("runs install when no command is given", () => {
-    expect(parse().command.name).toBe("install");
+    expect(parse().command).toBe("install");
   });
 
   it("takes options before and after the command", () => {
@@ -19,12 +19,13 @@ describe("parseArgs", () => {
       parallel: false,
       config: "a.json",
     });
+    expect(parse("--no-restage", "staged").options).toEqual({ restage: false });
   });
 
   it("hands everything after the hook name to run", () => {
     const { command, args, options } = parse("run", "-c", "a.json", "commit-msg", "FILE", "--bail");
 
-    expect(command.name).toBe("run");
+    expect(command).toBe("run");
     expect(args).toEqual(["commit-msg", "FILE", "--bail"]);
     expect(options).toEqual({ config: "a.json" });
   });
@@ -38,39 +39,8 @@ describe("parseArgs", () => {
     expect(parse("-v", "--nope").action).toBe("version");
   });
 
-  it("returns help over an unknown command, as before", () => {
+  it("returns help over an unknown command", () => {
     expect(parse("frobnicate", "-h").action).toBe("help");
-  });
-
-  it("gives a shared spelling the meaning of the chosen command", () => {
-    const table = [
-      {
-        name: "a",
-        description: "",
-        run,
-        flags: [{ flags: ["--x"], name: "x", value: 1, description: "" }],
-      },
-      {
-        name: "b",
-        description: "",
-        run,
-        flags: [{ flags: ["--x"], name: "y", value: 2, description: "" }],
-      },
-    ];
-
-    expect(parseArgs(["--x", "b"], table).options).toEqual({ y: 2 });
-    expect(parseArgs(["a", "--x"], table).options).toEqual({ x: 1 });
-  });
-
-  it("names every command that owns an option it rejects", () => {
-    const flag = { flags: ["--x"], name: "x", value: 1, description: "" };
-    const table = [
-      { name: "a", description: "", run, default: true },
-      { name: "b", description: "", run, flags: [flag] },
-      { name: "c", description: "", run, flags: [flag] },
-    ];
-
-    expect(() => parseArgs(["--x"], table)).toThrow('Option "--x" only applies to "b" and "c".');
   });
 
   it("returns the name of an unknown command", () => {
@@ -89,5 +59,23 @@ describe("parseArgs", () => {
     expect(() => parse("staged", "--nope")).toThrow('Unknown option "--nope".');
     expect(() => parse("staged", "extra")).toThrow('Unexpected argument "extra".');
     expect(() => parse("install", "--config")).toThrow('Option "--config" needs a path.');
+    expect(() => parse("install", "--config", "--bail")).toThrow('Option "--config" needs a path.');
+  });
+});
+
+describe("the command line and the configuration", () => {
+  it("has an option of staged for each setting of the configuration", () => {
+    const keys = Object.values(STAGED_OPTIONS).map(([key]) => key);
+
+    expect(keys.toSorted()).toEqual(SETTINGS.toSorted());
+  });
+});
+
+describe("the help text", () => {
+  it("names every command and every option", () => {
+    for (const command of COMMANDS) expect(HELP).toContain(`  ${command}`);
+    for (const option of [...Object.keys(STAGED_OPTIONS), "--config", "--version", "--help"]) {
+      expect(HELP).toContain(option);
+    }
   });
 });

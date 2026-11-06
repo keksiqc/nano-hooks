@@ -1,64 +1,61 @@
+/** The command names, in the order the help lists them. */
+export const COMMANDS = ["init", "install", "uninstall", "staged", "run"];
+
+/** The command that runs when no command is given. */
+const DEFAULT_COMMAND = "install";
+
 /**
- * Options every command accepts. One with an `action` ends the parsing, and the CLI does
- * that action (`help` or `version`). One with an `arg` takes a value and sets `options[name]`.
+ * Commands that pass their arguments on. The number is how many arguments the command reads
+ * itself: the rest go to the command untouched, and their dashes are not read as options.
  */
-export const GLOBAL_OPTIONS = [
-  {
-    flags: ["-c", "--config"],
-    arg: "<path>",
-    name: "config",
-    description: "Path to a nano-hooks configuration file",
-  },
-  { flags: ["-v", "--version"], action: "version", description: "Show the version" },
-  { flags: ["-h", "--help"], action: "help", description: "Show this help" },
-];
+const PASSTHROUGH = { init: 0, run: 1 };
 
-const spells = (option, arg) => option.flags.includes(arg);
+/** The options of `staged`: the spelling, the key in the settings, and the value it sets. */
+export const STAGED_OPTIONS = {
+  "--allow-empty": ["allowEmpty", true],
+  "--bail": ["bail", true],
+  "--no-parallel": ["parallel", false],
+  "--no-restage": ["restage", false],
+};
 
 /**
- * Options may appear before or after the command. Options that belong to one command are
- * read from the command table and rejected on the others. A help or version option wins
- * over every error that comes after it, also over an unknown command.
+ * Options may appear before or after the command. A help or version option wins over every
+ * error that comes after it, also over an unknown command.
  *
  * @param {string[]} argv
- * @param {import("./commands/index.js").Command[]} commands
- * @returns {{action?: "help" | "version", command?: import("./commands/index.js").Command, name?: string, options: Record<string, unknown>, args: string[]}}
+ * @returns {{action?: "help" | "version", command?: string, name?: string, options: Record<string, unknown>, args: string[]}}
  *   `action` is set instead of `command` for a help or version option, and `name` is set
  *   instead of `command` when the command is unknown
  */
-export function parseArgs(argv, commands) {
+export function parseArgs(argv) {
   const options = {};
-  const scoped = []; // spellings of the command options, resolved once the command is known
+  const staged = []; // options of `staged`, checked once the command is known
   const args = [];
   let command;
   let unknown;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    const global = GLOBAL_OPTIONS.find((option) => spells(option, arg));
 
-    if (global?.action) return { action: global.action, options, args: [] };
-    if (global) {
+    if (arg === "-v" || arg === "--version") return { action: "version", options, args: [] };
+    if (arg === "-h" || arg === "--help") return { action: "help", options, args: [] };
+    if (arg === "-c" || arg === "--config") {
       const value = argv[++i];
-      if (!value || value.startsWith("-")) {
-        throw new Error(`Option "${arg}" needs a ${global.arg.slice(1, -1)}.`);
-      }
-      options[global.name] = value;
+      if (!value || value.startsWith("-")) throw new Error(`Option "${arg}" needs a path.`);
+      options.config = value;
     } else if (arg.startsWith("-")) {
-      if (!commands.some((c) => c.flags?.some((flag) => spells(flag, arg)))) {
-        throw new Error(`Unknown option "${arg}".`);
-      }
-      scoped.push(arg);
+      if (!(arg in STAGED_OPTIONS)) throw new Error(`Unknown option "${arg}".`);
+      staged.push(arg);
     } else if (!command && !unknown) {
-      command = commands.find((c) => c.name === arg);
-      if (!command) unknown = arg;
-      else if (command.passthrough === 0) {
+      if (COMMANDS.includes(arg)) command = arg;
+      else unknown = arg;
+      if (PASSTHROUGH[command] === 0) {
         args.push(...argv.slice(i + 1));
         break;
       }
     } else {
       args.push(arg);
-      if (args.length === command?.passthrough) {
+      if (args.length === PASSTHROUGH[command]) {
         args.push(...argv.slice(i + 1));
         break;
       }
@@ -66,19 +63,14 @@ export function parseArgs(argv, commands) {
   }
 
   if (unknown) return { name: unknown, options, args };
-  command ??= commands.find((c) => c.default);
-  if (command.passthrough === undefined && args.length) {
+  command ??= DEFAULT_COMMAND;
+  if (PASSTHROUGH[command] === undefined && args.length) {
     throw new Error(`Unexpected argument "${args[0]}".`);
   }
-  for (const arg of scoped) {
-    const flag = command.flags?.find((f) => spells(f, arg));
-    if (!flag) {
-      const owners = commands.filter((c) => c.flags?.some((f) => spells(f, arg)));
-      throw new Error(
-        `Option "${arg}" only applies to ${owners.map((c) => `"${c.name}"`).join(" and ")}.`,
-      );
-    }
-    options[flag.name] = flag.value;
+  for (const arg of staged) {
+    if (command !== "staged") throw new Error(`Option "${arg}" only applies to "staged".`);
+    const [key, value] = STAGED_OPTIONS[arg];
+    options[key] = value;
   }
   return { command, options, args };
 }

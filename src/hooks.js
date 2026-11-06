@@ -9,9 +9,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { hookParts, loadConfig } from "./config.js";
-import { NotGitRepositoryError, createGit } from "./git.js";
-import { log } from "./log.js";
+import { hasStaged, hookParts, loadConfig } from "./config.js";
+import { createGit } from "./git.js";
 
 export const MARKER = "# nano-hooks: managed file, do not edit";
 
@@ -50,40 +49,22 @@ export function managedHooks(hooksDir) {
 }
 
 /**
- * The commands that add a step to a hook, such as `staged` for `pre-commit`. A command adds
- * its step when the hook in the configuration has the key of that command. The command
- * list loads on first use, because the commands import this module.
- * @param {string} name a git hook name
- * @param {unknown} value the value of the hook in the configuration
- * @returns {Promise<import("./commands/index.js").Command[]>}
- */
-export async function hookSteps(name, value) {
-  const { commands } = await import("./commands/index.js");
-  const parts = hookParts(value);
-  return commands.filter(
-    (command) => command.hook === name && parts[command.section.name] !== undefined,
-  );
-}
-
-/**
- * The shell code of an installed hook: one call of `nano-hooks` for each step of the hook,
- * such as `nano-hooks staged`, and then the `run` commands as they are written. The first
- * one that fails stops the hook. `cd` is a prefix for the calls of `nano-hooks`, for hooks
- * that start in another directory, and `config` is the configuration file of the project,
- * if it is not discovered. A call runs in a subshell, so that `cd` does not change where
- * the `run` commands start.
+ * The shell code of an installed hook: a call of `nano-hooks staged` if the hook has the
+ * `staged` step, and then the `run` commands as they are written. The first one that fails
+ * stops the hook. `cd` is a prefix for the call of `nano-hooks`, for hooks that start in
+ * another directory, and `config` is the configuration file of the project, if it is not
+ * discovered. The call runs in a subshell, so that `cd` does not change where the `run`
+ * commands start.
  * @param {string} name
  * @param {unknown} value
  * @param {string} [config]
  * @param {string} [cd]
  */
-async function hookCommand(name, value, config, cd) {
+function hookCommand(name, value, config, cd) {
   const flag = config ? ` --config ${quote(config)}` : "";
   // The `nano-hooks` command comes from `node_modules/.bin`, which the script puts on PATH.
-  const steps = (await hookSteps(name, value)).map((step) => {
-    const call = `${cd}nano-hooks ${step.name}${flag}`;
-    return cd ? `(${call})` : call;
-  });
+  const call = `${cd}nano-hooks staged${flag}`;
+  const steps = hasStaged(name, value) ? [cd ? `(${call})` : call] : [];
   const { run = [] } = hookParts(value);
   return commandScript([...steps, ...[run].flat()]);
 }
@@ -147,7 +128,7 @@ export async function install({ cwd = process.cwd(), config } = {}) {
       skipped.push(name);
       continue;
     }
-    writeFileSync(path, hookScript(binDir, await hookCommand(name, value, config, cd)), {
+    writeFileSync(path, hookScript(binDir, hookCommand(name, value, config, cd)), {
       mode: 0o755,
     });
     chmodSync(path, 0o755);
@@ -162,39 +143,4 @@ export async function install({ cwd = process.cwd(), config } = {}) {
   for (const name of removed) unlinkSync(join(hooksDir, name));
 
   return { installed, removed, skipped, hooksDir, external };
-}
-
-/** Write the hooks and report what happened. @returns {Promise<number>} the exit code */
-export async function installHooks(config) {
-  // Lets CI and container builds run `prepare` without installing hooks.
-  if (process.env.NANO_HOOKS === "0") {
-    log.info("Skipped install because NANO_HOOKS=0.");
-    return 0;
-  }
-
-  let result;
-  try {
-    result = await install({ config });
-  } catch (error) {
-    if (!(error instanceof NotGitRepositoryError)) throw error;
-    // A `prepare` script must not fail an install where there is no .git directory.
-    log.warn(`${error.message}. Hooks were not installed.`, { markup: false });
-    return 0;
-  }
-  const { installed, removed, skipped, hooksDir, external } = result;
-  if (external && hasForeignFiles(hooksDir)) {
-    log.warn(
-      `core.hooksPath points outside .git: ${hooksDir}. Another hooks manager, such as husky, can use the same directory.`,
-      { markup: false },
-    );
-  }
-  for (const name of installed) log.success(`Installed *${name}*`);
-  for (const name of removed) log.success(`Removed *${name}* (no longer configured)`);
-  for (const name of skipped) {
-    log.warn(`Skipped *${name}* because nano-hooks did not write the existing hook`);
-  }
-  if (!installed.length && !removed.length && !skipped.length) {
-    log.info("No hooks to install.");
-  }
-  return 0;
 }

@@ -1,8 +1,9 @@
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
-import { VALID_HOOKS, hookParts, loadConfig } from "../config.js";
+import { VALID_HOOKS, hasStaged, hookParts, loadConfig } from "../config.js";
 import { envWithBin } from "../exec.js";
-import { commandScript, hookSteps } from "../hooks.js";
+import { commandScript } from "../hooks.js";
+import { runConfiguredStaged } from "./staged.js";
 
 /**
  * Run one hook now, as git would. The steps of the hook, such as `staged`, run first. Then
@@ -24,8 +25,8 @@ export async function runHook(name, args = [], { cwd = process.cwd(), config } =
   const value = loaded.hooks[name];
   if (value === undefined) throw new Error(`No command configured for hook "${name}".`);
 
-  for (const step of await hookSteps(name, value)) {
-    const code = await step.hookStep({ loaded, cwd: projectRoot });
+  if (hasStaged(name, value)) {
+    const code = await runConfiguredStaged({ loaded, cwd: projectRoot });
     if (code !== 0) return code;
   }
   const { run } = hookParts(value);
@@ -43,18 +44,3 @@ export async function runHook(name, args = [], { cwd = process.cwd(), config } =
     child.on("close", (code) => resolvePromise(code ?? 1));
   });
 }
-
-/** @type {import("./index.js").Command} */
-export const command = {
-  name: "run",
-  usage: "run <hook> [args]",
-  description: "Run the configured command of one git hook now",
-  // After `run <hook>`, everything is an argument for the hook.
-  passthrough: 1,
-  note: "Arguments after <hook> go to the hook command as $1, $2 and so on, so put\n--config before <hook>.",
-  run({ options, args: [hook, ...hookArgs] }) {
-    if (!hook) throw new Error('Command "run" needs a hook name.');
-    // The hook command prints its own output and decides the exit code.
-    return runHook(hook, hookArgs, { config: options.config });
-  },
-};
