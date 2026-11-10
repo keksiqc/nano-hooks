@@ -10,7 +10,7 @@ import { HELP } from "./help.js";
 import { hasForeignFiles, install } from "./hooks.js";
 import { log } from "./log.js";
 
-/** Write the hooks and report what happened. @returns {Promise<number>} the exit code */
+/** Write the hooks and report what happened. Returns the exit code. */
 async function installHooks(config) {
   // Lets CI and container builds run `prepare` without installing hooks.
   if (process.env.NANO_HOOKS === "0") {
@@ -69,7 +69,7 @@ const handlers = {
   },
 };
 
-/** @returns {Promise<number>} the process exit code */
+/** Returns the process exit code. */
 async function main(argv) {
   try {
     const { action, command, name, options, args } = parseArgs(argv);

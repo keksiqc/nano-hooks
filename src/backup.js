@@ -10,37 +10,21 @@ export class EmptyCommitError extends Error {
 }
 
 /**
- * A step of the workflow, as the observer sees it. The workflow owns these objects and
- * changes their `state`; an observer reads them and never writes to them.
- * @typedef {object} WorkflowStep
- * @property {string} title what the step does
- * @property {"run" | "done" | "fail"} state the outcome, set by the workflow
- * @property {object[]} [tasks] the progress nodes of the task execution, for the
- * "Running tasks" step. The task execution sets their state, the workflow never does.
- */
+// A step is `{ title, state, tasks? }`. The workflow sets `state` (`run`, `done`, `fail`), and
+// the observer only reads it. `tasks` are the progress nodes of the task execution.
 
 /**
- * Run `execute` on the staged files inside a safety lifecycle that protects the working
- * tree: back up the unstaged changes, run the tasks, add their modifications to the index
- * and restore the unstaged changes. A failure rolls back to the original state.
+/**
+ * Run `execute` on the staged files with the working tree protected: back up the unstaged
+ * changes, run the tasks, add their changes to the index and restore the unstaged changes.
+ * A failure rolls back to the original state.
  *
- * The workflow decides when the recovery patches in `dotPath` are safe to remove. It keeps
- * them, and lists their paths in the error, when a rollback or a restoration did not finish.
- * A later run refuses to start while these patches exist.
+ * The recovery patches in `dotPath` stay, and the error lists them, when a rollback or a
+ * restoration did not finish. A later run refuses to start while they exist.
  *
- * @param {object} options
- * @param {boolean} [options.allowEmpty] allow an index without changes after the tasks
- * @param {boolean} [options.restage] add the changes of the tasks to the index (default).
- * With `false`, the changes stay in the working tree and the index stays as it was.
- * @param {string} options.dotPath the git directory, where the patches go
- * @param {string} options.rootPath the repository root
- * @param {{ working: string[], changed: string[], deleted: string[] }} options.files the
- * staged files, as `stagedFiles` of the git helpers returns them
- * @param {{ tasks?: object[], run: () => Promise<void> }} options.execute
- * the task execution. It owns its own `tasks` nodes, which the observer can read.
- * @param {(step: WorkflowStep) => void} [options.onStep] called when a step starts. The
- * step changes state later. The return value and errors of the observer are ignored.
- * @throws {AggregateError} with one error per failed step, in the order they happened
+ * `files` is the result of `stagedFiles`. With `restage: false`, the changes of the tasks stay
+ * in the working tree. `onStep` gets each step when it starts. Throws an `AggregateError` with
+ * one error per failed step.
  */
 export async function runWithBackup({
   allowEmpty = false,
@@ -65,9 +49,8 @@ export async function runWithBackup({
   }
 
   const errors = [];
-  /** Run one step, show it to the observer, and record its error. @returns {Promise<boolean>} true if it worked */
+  /** Run one step, show it to the observer and record its error. Returns true if it worked. */
   const step = async (title, run, tasks) => {
-    /** @type {WorkflowStep} */
     const node = { title, state: "run" };
     if (tasks) node.tasks = tasks;
     try {

@@ -21,10 +21,9 @@ export function isManaged(path) {
 }
 
 /**
- * The shell code for a hook command, or for a list of commands that run one after the
- * other. The first command that fails stops the list and its exit code is the result.
- * Each command but the last is in braces, so that `;` or `||` inside it cannot change
- * where the list stops.
+/**
+ * The shell code for a command or a list of commands. The first failure stops the list. Each
+ * command but the last is in braces, so a `;` or `||` inside it cannot change where it stops.
  */
 export function commandScript(command) {
   if (!Array.isArray(command)) return command;
@@ -49,16 +48,11 @@ export function managedHooks(hooksDir) {
 }
 
 /**
+/**
  * The shell code of an installed hook: a call of `nano-hooks staged` if the hook has the
- * `staged` step, and then the `run` commands as they are written. The first one that fails
- * stops the hook. `cd` is a prefix for the call of `nano-hooks`, for hooks that start in
- * another directory, and `config` is the configuration file of the project, if it is not
- * discovered. The call runs in a subshell, so that `cd` does not change where the `run`
- * commands start.
- * @param {string} name
- * @param {unknown} value
- * @param {string} [config]
- * @param {string} [cd]
+ * `staged` step, then the `run` commands. `cd` prefixes the call for hooks that start in
+ * another directory, and `config` is a config file that is not discovered. The call runs in a
+ * subshell, so `cd` does not change where the `run` commands start.
  */
 function hookCommand(name, value, config, cd) {
   const flag = config ? ` --config ${quote(config)}` : "";
@@ -70,9 +64,9 @@ function hookCommand(name, value, config, cd) {
 }
 
 /**
- * The project directory as a path relative to the working tree root, with forward slashes,
- * or "" when they are the same. Git runs hooks from the working tree root, so the scripts
- * can use this instead of absolute paths and keep working when the repository moves.
+/**
+ * The project directory relative to the working tree root, with forward slashes, or "".
+ * Hooks use it instead of absolute paths, so they keep working when the repository moves.
  */
 async function relativeRoot(projectRoot) {
   try {
@@ -102,12 +96,10 @@ function hookScript(binDir, script) {
 }
 
 /**
- * Write the configured hook scripts and drop stale managed ones.
- * @param {{ cwd?: string, config?: string }} [options] `config` is a nano-hooks config file
- * (relative to `cwd`) to use instead of discovering one.
- * @returns {Promise<{ installed: string[], removed: string[], skipped: string[], hooksDir: string, external: boolean }>}
- * `external` is true when `hooksDir` is outside the git directory because `core.hooksPath`
- * points there, so another tool such as husky can manage the same directory.
+/**
+ * Write the configured hook scripts and drop stale managed ones. `config` is a config file,
+ * relative to `cwd`, to use instead of discovering one. `external` in the result is true when
+ * `hooksDir` is outside the git directory because `core.hooksPath` points there, as husky does.
  */
 export async function install({ cwd = process.cwd(), config } = {}) {
   const projectRoot = resolve(cwd);

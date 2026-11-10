@@ -20,9 +20,7 @@ export class NotGitRepositoryError extends Error {
 }
 
 /**
- * Parse `git status -z` output into `{ x, y, path }` entries, where `x` and `y` are the
- * index and worktree status letters and `path` is the current path.
- */
+/** Parse `git status -z` into `{ x, y, path }`: the index and worktree letters and the path. */
 function parseStatus(raw) {
   const fields = raw.split("\0");
   const entries = [];
@@ -56,17 +54,11 @@ const isInside = (parent, child) => {
 };
 
 /**
- * Bind the git helpers to a directory.
- * @param {string} [cwd]
- */
+/** Bind the git helpers to a directory. */
 export function createGit(cwd = process.cwd()) {
   const exec = (args, options = {}) => run("git", args, { cwd, ...options });
 
-  /**
-   * The directory git looks for hooks in; honours `core.hooksPath` and worktrees.
-   * `external` is true when it lies outside the git directory, which only happens
-   * when `core.hooksPath` points there, as husky does.
-   */
+  /** The hooks directory, honouring `core.hooksPath` and worktrees. `external`: outside .git. */
   const hooksInfo = async () => {
     try {
       const out = await exec(["rev-parse", "--git-path", "hooks", "--git-common-dir"]);
@@ -94,7 +86,7 @@ export function createGit(cwd = process.cwd()) {
       return (await hooksInfo()).dir;
     },
 
-    /** The repository root and git directory, or `{ root: null, dot: null }` outside a repository. */
+    /** The repository root and git directory, or nulls outside a repository. */
     async getGitPaths() {
       // Git sets these in some hooks; they would point later commands at the wrong place.
       delete process.env.GIT_DIR;
@@ -129,11 +121,7 @@ export function createGit(cwd = process.cwd()) {
       if (paths.length) await exec(["add", "-A", "--", ...paths]);
     },
 
-    /**
-     * Whether adding `paths` would leave the index different from HEAD. Only the index counts:
-     * unstaged changes to other files do not. The check runs on a copy of the index, so the
-     * real index stays as it is.
-     */
+    /** Whether adding `paths` would make the index differ from HEAD. Uses a copy of the index. */
     async wouldChange(paths) {
       const index = resolve(cwd, (await exec(["rev-parse", "--git-path", "index"])).trim());
       const copy = `${index}.nano-hooks-check`;
@@ -152,9 +140,8 @@ export function createGit(cwd = process.cwd()) {
     },
 
     /**
-     * The staged files, relative to the repository root. `working` lists every staged file
-     * that still exists, `changed` those that also have unstaged modifications and
-     * `deleted` those deleted from the worktree but not from the index.
+     * The staged files, relative to the repository root: `working` (still exist), `changed`
+     * (also modified unstaged) and `deleted` (deleted from the worktree only).
      */
     async stagedFiles() {
       const raw = await exec(["status", "-z", "-u"], { env: { GIT_OPTIONAL_LOCKS: "0" } });

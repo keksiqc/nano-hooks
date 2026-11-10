@@ -58,13 +58,10 @@ function tree(tasks, frame, level = 0) {
 }
 
 /**
- * Draw the task list to `stream`: redrawn in place on a terminal, appended otherwise.
- *
- * The renderer only observes. A task is `{ title, state, detail?, tasks? }`: the code that
- * runs it sets `state` (`run`, `done`, `fail` or `warn`, none while it waits) and the
- * renderer never writes to it.
- * @param {NodeJS.WritableStream} stream
- * @param {{ isTTY?: boolean, quiet?: boolean }} [options]
+/**
+ * Draw a task list to `stream`: redrawn in place on a terminal, appended otherwise. A task is
+ * `{ title, state, detail?, tasks? }`. The code that runs it sets `state` (`run`, `done`,
+ * `fail` or `warn`, none while it waits). The renderer never writes it.
  */
 export function createRenderer(stream, { isTTY = true, quiet = false } = {}) {
   const tasks = [];

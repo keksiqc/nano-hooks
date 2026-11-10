@@ -132,20 +132,16 @@ function compile(pattern) {
 }
 
 /**
- * Convert a glob to an anchored RegExp. Throws for a group like `!(a)`.
- * @param {string} glob
- * @returns {RegExp}
- */
+/** Convert a glob to an anchored RegExp. Throws for a group like `!(a)`. */
 export function globToRegex(glob) {
   const sources = expandBraces(glob).map((pattern) => compile(pattern));
   return new RegExp(`^(?:${sources.join("|")})$`);
 }
 
 /**
- * Build a matcher for a glob. A pattern without a slash matches the file name at any depth,
- * so `*.js` matches `src/a.js`.
- * @param {string} glob
- * @returns {(file: string) => boolean} takes a path with forward slashes
+/**
+ * Build a matcher for a glob and a path with forward slashes. A pattern without a slash
+ * matches the file name at any depth.
  */
 export function createMatcher(glob) {
   const regex = globToRegex(glob);

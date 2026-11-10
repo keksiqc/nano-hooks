@@ -22,12 +22,10 @@ const OPTIONS = {
 };
 
 /**
- * Options may appear before or after the command. A bad option makes `util.parseArgs` throw.
- *
- * @param {string[]} argv
- * @returns {{action?: "help" | "version", command?: string, name?: string, options: Record<string, unknown>, args: string[]}}
- *   `action` is set instead of `command` for a help or version option, and `name` is set
- *   instead of `command` when the command is unknown
+/**
+ * Options may appear before or after the command. The result has `action` ("help" or
+ * "version") instead of `command` for those options, and `name` for an unknown command.
+ * A bad option makes `util.parseArgs` throw.
  */
 export function parseArgs(argv) {
   const { values, positionals } = parseNodeArgs({

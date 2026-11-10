@@ -8,12 +8,7 @@ import { createRenderer, log } from "../log.js";
 import { CommandError, createCommandGroups, runCommandGroups } from "../tasks.js";
 
 /**
- * Run the configured commands on the staged files, keeping the working tree safe: unstaged
- * changes are set aside while commands run, their modifications are added back, and
- * everything is restored if a command fails.
- * @returns {Promise<boolean>} false when no staged file matched any pattern
- * @throws {AggregateError} with one error per failed step
- */
+/** Run the commands on the staged files with the working tree protected. False if none matched. */
 async function runTasks({
   allowEmpty,
   gitPaths,
@@ -58,9 +53,7 @@ async function runTasks({
 }
 
 /**
- * Git reports canonical paths (symlinks and Windows 8.3 short names resolved) and file
- * matching compares them with cwd, so cwd has to be canonical too.
- */
+/** Git reports canonical paths, so cwd has to be canonical too. */
 function canonical(path) {
   try {
     return realpathSync.native(path);
@@ -93,18 +86,11 @@ function report(error, stream) {
 }
 
 /**
- * Run commands on the staged files, as configured by glob pattern. Failures are reported to
- * `stream` and then rethrown, as an `AggregateError` when several steps failed.
- * @param {object} options
- * @param {Record<string, string | string[]>} options.config glob pattern to command or list
- * of commands
- * @param {string} [options.cwd] only staged files below this directory are processed
- * @param {boolean} [options.allowEmpty] allow a commit that is empty once the commands ran
- * @param {boolean} [options.bail] stop after the first failing command
- * @param {boolean} [options.parallel] run the patterns side by side (default) or one by one
- * @param {boolean} [options.restage] add the changes of the commands to the commit (default)
- * @param {boolean} [options.quiet] do not draw task progress
- * @param {NodeJS.WriteStream} [options.stream] where progress and errors go, stderr by default
+/**
+ * Run the commands of `config` (glob pattern to command or list of commands) on the staged
+ * files below `cwd`. Failures go to `stream` and are rethrown, as an `AggregateError` when
+ * several steps failed. The other options are the settings of `staged`, and `quiet` hides the
+ * progress.
  */
 export async function runStaged({
   config,
@@ -154,13 +140,9 @@ export async function runStaged({
 }
 
 /**
- * Run the `staged` step of the `pre-commit` hook from the configuration. The settings come
- * from `flags` first, then the hook, then the `options` section.
- * @param {object} options
- * @param {Awaited<ReturnType<typeof loadConfig>>} options.loaded
- * @param {Record<string, unknown>} [options.flags] settings from the command line
- * @param {string} [options.cwd]
- * @returns {Promise<number>} the exit code
+/**
+ * Run the `staged` step of the `pre-commit` hook. A setting comes from `flags`, then the
+ * hook, then `options`. Returns the exit code.
  */
 export async function runConfiguredStaged({ loaded, flags = {}, cwd }) {
   const hook = hookParts(loaded.hooks[STAGED_HOOK]);

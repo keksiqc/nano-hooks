@@ -13,13 +13,9 @@ export function envWithBin(dir, env = process.env) {
 }
 
 /**
- * Run `command` and resolve with its combined stdout and stderr. Rejects with an Error whose
- * message is the command output when it exits non-zero.
- * @param {string} command
- * @param {string[]} [args]
- * @param {{ cwd?: string, env?: Record<string, string>, signal?: AbortSignal }} [options]
- *   `env` is added to the environment of this process
- * @returns {Promise<string>}
+/**
+ * Run `command` and resolve with its combined stdout and stderr. A non-zero exit rejects with
+ * the output as the message. `env` is added to the environment of this process.
  */
 export function run(command, args = [], { cwd = process.cwd(), env, signal } = {}) {
   return new Promise((resolvePromise, reject) => {

@@ -6,12 +6,10 @@ import { commandScript } from "../hooks.js";
 import { runConfiguredStaged } from "./staged.js";
 
 /**
- * Run one hook now, as git would. The steps of the hook, such as `staged`, run first. Then
- * the `run` commands run in a `sh` shell with the output shown as it happens. A step that
- * fails stops the hook. Unlike an installed hook, it ignores `SKIP_NANO_HOOKS`.
- * @param {string} name a git hook name, such as `pre-commit`
- * @param {{ cwd?: string, config?: string }} [options]
- * @returns {Promise<number>} the exit code of the command
+/**
+ * Run one hook now, as git would: the `staged` step first, then the `run` commands in a `sh`
+ * shell. A failing step stops the hook. Unlike an installed hook, it ignores
+ * `SKIP_NANO_HOOKS`. Returns the exit code.
  */
 export async function runHook(name, { cwd = process.cwd(), config } = {}) {
   if (!VALID_HOOKS.includes(name)) {

@@ -43,11 +43,7 @@ export const isCommandList = (value) =>
   isCommand(value) || (Array.isArray(value) && value.length > 0 && value.every(isCommand));
 
 /**
- * The parts of a hook value. A command or a list of commands is the same as an object with
- * only `run`.
- * @param {unknown} value the value of a hook in the configuration
- * @returns {{ run?: string | string[] } & Record<string, unknown>}
- */
+/** The parts of a hook value. A command or a list of commands is the same as `{ run }`. */
 export function hookParts(value) {
   if (value === undefined) return {};
   return isObject(value) ? value : { run: value };
@@ -84,10 +80,7 @@ function readFile(cwd, file) {
 }
 
 /**
- * Find the config in `cwd`: the `nano-hooks` key of `package.json` or one of the files in
- * `FILES`. More than one of them is an error, because the project then has two
- * configurations and only one can be right.
- */
+/** Find the config in `cwd`. More than one place is an error. */
 export function findConfig(cwd) {
   const found = [];
   const pkg = join(cwd, "package.json");
@@ -203,17 +196,10 @@ function validate(raw) {
 }
 
 /**
- * Load the nano-hooks config from `cwd` (no upward search), or from `options.file`
- * (relative to `cwd`) when given. A missing config is an empty one; an invalid config,
- * or a named file that is missing, rejects.
- * @param {string} [cwd]
- * @param {{ file?: string }} [options]
- * @returns {Promise<{
- *   hooks: Record<string, string | string[] | Record<string, unknown>>,
- *   preserveUnused: boolean | string[],
- *   options: Record<string, boolean>,
- * }>} `hooks` holds each hook as written: a command, a list of commands or an object. Use
- * `hookParts` to read one.
+/**
+ * Load the config from `cwd` (no upward search) or from `file`, relative to `cwd`. A missing
+ * config is an empty one. An invalid config, or a named file that is missing, rejects.
+ * `hooks` holds each hook as written: use `hookParts` to read one.
  */
 export async function loadConfig(cwd = process.cwd(), { file } = {}) {
   const found = file ? readFile(cwd, file) : findConfig(cwd);
