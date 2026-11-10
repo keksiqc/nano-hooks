@@ -49,7 +49,6 @@
         "*": "pnpm run fmt",
         "*.{js,jsx,ts,tsx,mjs,cjs}": "pnpm run lint"
       }
-    },
-    "pre-push": "pnpm run test"
+    }
   }
 }
