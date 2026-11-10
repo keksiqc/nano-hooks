@@ -87,7 +87,7 @@ If you used nano-hooks 0.4 or earlier, read [MIGRATION.md](./MIGRATION.md).
 
 ### Commands in hooks and in `staged`
 
-In a hook, every command runs in a `sh` shell, gets the hook arguments as `$1`, `$2`, and so on, and the exit code of the failing command is the exit code of the hook. In `staged`, every command gets the staged files that match the pattern, and the rest of the list is skipped after a failure. A `staged` command does not run in a shell. nano-hooks splits it into words and quotes, then starts the program directly. Shell features such as `&&`, `|`, `$VAR` and `A=1 cmd` do not work there, and quote marks inside a word stay in the argument. To use them, write `sh -c '...'` as the command.
+In a hook, every command runs in a `sh` shell, gets the hook arguments as `$1`, `$2`, and so on, and the exit code of the failing command is the exit code of the hook. In `staged`, every command gets the staged files that match the pattern, and the rest of the list is skipped after a failure. A `staged` command also runs in a `sh` shell, and nano-hooks adds the files to the end of the command line. Shell features such as `$VAR` and `A=1 cmd` work. An operator such as `&&` or `|` splits the line, so the files go to the last command only. To send the files to another command, write `sh -c '...' sh` as the command.
 
 ### Behavior
 

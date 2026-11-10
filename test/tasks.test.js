@@ -1,26 +1,9 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createRenderer } from "../src/log.js";
-import {
-  CommandError,
-  chunkFiles,
-  createCommandGroups,
-  runCommandGroups,
-  splitCommand,
-} from "../src/tasks.js";
+import { CommandError, chunkFiles, createCommandGroups, runCommandGroups } from "../src/tasks.js";
 import { testTempDir } from "./helpers.js";
-
-describe("splitCommand", () => {
-  it("splits on whitespace", () => {
-    expect(splitCommand("prettier --write  --cache")).toEqual(["prettier", "--write", "--cache"]);
-  });
-
-  it("keeps quoted text together, once", () => {
-    expect(splitCommand(`echo "a b" 'c d'`)).toEqual(["echo", "a b", "c d"]);
-    expect(splitCommand(`run --name="a b"`)).toEqual(["run", `--name="a b"`]);
-  });
-});
 
 describe("chunkFiles", () => {
   it("keeps all files in one chunk when they fit", () => {
@@ -78,6 +61,39 @@ describe("createCommandGroups", () => {
     await group.tasks[0].run();
 
     expect(calls(dir)).toEqual([2, 2, 1]);
+  });
+
+  it("runs a command in a shell and keeps a file name with spaces in one piece", async () => {
+    const dir = setup();
+    const [group] = await createCommandGroups({
+      config: { "*.js": "COUNT=1 node count.js" },
+      files: ["a b.js"],
+      cwd: dir,
+      rootPath: dir,
+    });
+
+    await group.tasks[0].run();
+
+    expect(calls(dir)).toEqual([1]);
+  });
+
+  it("finds a tool in node_modules/.bin of a parent directory", async () => {
+    const dir = setup();
+    const bin = join(dir, "node_modules", ".bin");
+    mkdirSync(bin, { recursive: true });
+    writeFileSync(join(bin, "mytool"), `#!/bin/sh\necho 1 >> calls.log\n`, { mode: 0o755 });
+    const sub = join(dir, "sub");
+    mkdirSync(sub);
+    const [group] = await createCommandGroups({
+      config: { "*.js": "mytool" },
+      files: ["sub/a.js"],
+      cwd: sub,
+      rootPath: dir,
+    });
+
+    await group.tasks[0].run();
+
+    expect(calls(dir)).toEqual([1]);
   });
 });
 

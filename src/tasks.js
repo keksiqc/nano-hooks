@@ -1,9 +1,6 @@
 import { isAbsolute, normalize, relative, resolve } from "node:path";
-import { run } from "./exec.js";
+import { envWithBin, run } from "./exec.js";
 import { createMatcher } from "./glob.js";
-
-/** Matches a bare word, a quoted string, or a word with quoted parts, like a shell would. */
-const ARGUMENT = /([^\s'"]([^\s'"]*(['"])([^\3]*?)\3)+[^\s'"]*)|[^\s'"]+|(['"])([^\5]*?)\5/g;
 
 /**
  * The most characters that the files of one command call can use. These are half of the
@@ -46,11 +43,6 @@ export class CommandError extends Error {
     );
     this.failures = failures;
   }
-}
-
-/** Split a command line into arguments, honouring single and double quotes. */
-export function splitCommand(command) {
-  return Array.from(command.matchAll(ARGUMENT), (match) => match[1] ?? match[6] ?? match[0]);
 }
 
 /**
@@ -105,6 +97,7 @@ export function createCommandGroups({
   const relativeFiles = files.map((file) =>
     normalize(relative(cwd, resolve(rootPath, file))).replaceAll("\\", "/"),
   );
+  const env = envWithBin(cwd);
   const groups = [];
 
   for (const [pattern, commands] of Object.entries(config)) {
@@ -122,20 +115,16 @@ export function createCommandGroups({
       : "no files";
 
     const group = { title: pattern, detail: suffix, fileCount: matched.length };
-    group.tasks = lines.map((line) => {
-      const [command, ...args] = splitCommand(line);
-      return {
-        title: line,
-        pattern,
-        // A command gets the files, as many per call as fit in one command line.
-        run: async (signal) => {
-          const used = [command, ...args].join(" ").length;
-          for (const chunk of chunkFiles(matched, used, maxArgLength)) {
-            await run(command, [...args, ...chunk], { cwd: rootPath, signal });
-          }
-        },
-      };
-    });
+    group.tasks = lines.map((line) => ({
+      title: line,
+      pattern,
+      // A command runs in a shell and gets the files, as many per call as fit in one command line.
+      run: async (signal) => {
+        for (const chunk of chunkFiles(matched, line.length, maxArgLength)) {
+          await run("sh", ["-c", `${line} "$@"`, "sh", ...chunk], { cwd: rootPath, env, signal });
+        }
+      },
+    }));
     groups.push(group);
   }
 
