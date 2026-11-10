@@ -30,10 +30,6 @@ describe("parseArgs", () => {
     expect(options).toEqual({ config: "a.json" });
   });
 
-  it("hands everything after init to init", () => {
-    expect(parse("init", "pnpm", "run", "--fix").args).toEqual(["pnpm", "run", "--fix"]);
-  });
-
   it("returns the help and version actions as soon as it sees their option", () => {
     expect(parse("staged", "-h").action).toBe("help");
     expect(parse("-v", "--nope").action).toBe("version");

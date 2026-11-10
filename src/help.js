@@ -2,8 +2,6 @@
 export const HELP = `Usage: nano-hooks [command] [options]
 
 Commands:
-  init [command]     Add a starter configuration to package.json (default command:
-                     "<package manager> run lint") and install the hooks
   install (default)  Write the configured git hooks
   uninstall          Remove the hooks nano-hooks manages
   staged             Run the staged step of the pre-commit hook

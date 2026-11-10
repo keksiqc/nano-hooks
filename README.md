@@ -37,8 +37,6 @@ nano-hooks requires Node 22, or Node 24 and later.
 
 3. Run `pnpm install`. The `prepare` script writes the hooks to your repository.
 
-To get a starter configuration without editing `package.json` yourself, run `pnpm exec nano-hooks init` after step 1. See [`init`](#cli).
-
 ## Configuration
 
 nano-hooks reads its configuration from one of these places, in this order: the `nano-hooks` key in `package.json`, the file `nano-hooks.config.json`, and the file `.nano-hooks.json`. All of them hold plain JSON. nano-hooks never runs your code to read the configuration. It looks only in the directory where you run it, unless you set `--config`. If more than one of these places exists, nano-hooks stops with an error that names them. Keep one.
@@ -103,7 +101,6 @@ In a hook, every command runs in a `sh` shell, gets the hook arguments as `$1`, 
 
 | Command                              | Description                                          |
 | ------------------------------------ | ---------------------------------------------------- |
-| `nano-hooks init [command]`          | Add a starter configuration and install it.          |
 | `nano-hooks` or `nano-hooks install` | Write the configured hooks.                          |
 | `nano-hooks uninstall`               | Remove the hooks that nano-hooks manages.            |
 | `nano-hooks staged`                  | Run the `staged` step of the `pre-commit` hook only. |
@@ -120,8 +117,6 @@ In a hook, every command runs in a `sh` shell, gets the hook arguments as `$1`, 
 | `--no-restage`        | `staged`      | Leave the changes of the commands out of the commit.           |
 
 The `--config` option accepts a `.json` file or a `package.json` file. For a `package.json` file, nano-hooks reads the `nano-hooks` key. nano-hooks resolves a relative path from the directory where you run the command. A file with another extension, such as `.js`, is an error.
-
-The `init` command adds a `nano-hooks` key to `package.json` with a `pre-commit` hook that runs `command`. For example, `nano-hooks init pnpm run lint`. If you give no command, it uses `<package manager> run lint`. It takes the package manager from the `packageManager` field, or else from the lock file, or else it uses `npm`. Everything after `init` is the command, so options such as `--fix` go to the command and `--config` must come before `init`. The command also adds a `prepare` script that runs `nano-hooks`, or appends `&& nano-hooks` to your own `prepare` script. Then it installs the hooks. If nano-hooks is already configured, `init` stops and changes nothing. It always writes to `package.json` and ignores `--config`.
 
 The `uninstall` command does not read the configuration. It accepts `--config` but ignores it.
 

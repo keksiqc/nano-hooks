@@ -1,5 +1,5 @@
 /** The command names, in the order the help lists them. */
-export const COMMANDS = ["init", "install", "uninstall", "staged", "run"];
+export const COMMANDS = ["install", "uninstall", "staged", "run"];
 
 /** The command that runs when no command is given. */
 const DEFAULT_COMMAND = "install";
@@ -8,7 +8,7 @@ const DEFAULT_COMMAND = "install";
  * Commands that pass their arguments on. The number is how many arguments the command reads
  * itself: the rest go to the command untouched, and their dashes are not read as options.
  */
-const PASSTHROUGH = { init: 0, run: 1 };
+const PASSTHROUGH = { run: 1 };
 
 /** The options of `staged`: the spelling, the key in the settings, and the value it sets. */
 export const STAGED_OPTIONS = {

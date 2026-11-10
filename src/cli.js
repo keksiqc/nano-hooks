@@ -2,7 +2,6 @@
 import { readFileSync } from "node:fs";
 import { parseArgs } from "./args.js";
 import { runHook } from "./commands/run.js";
-import { init } from "./commands/init.js";
 import { runConfiguredStaged } from "./commands/staged.js";
 import { uninstall } from "./commands/uninstall.js";
 import { loadConfig } from "./config.js";
@@ -47,16 +46,6 @@ async function installHooks(config) {
 
 /** What each command does. Each returns the exit code, and an error it throws exits with 1. */
 const handlers = {
-  async init({ args }) {
-    const { command, prepare } = await init({ command: args.join(" ") });
-    log.success(`Added the nano-hooks key to package.json`);
-    log.info(`pre-commit runs: ${command}`);
-    if (prepare !== "kept") {
-      log.info(`The prepare script ${prepare === "added" ? "is" : "now ends with"} nano-hooks.`);
-    }
-    return installHooks();
-  },
-
   install: ({ options }) => installHooks(options.config),
 
   // Uninstall removes whatever nano-hooks wrote, so it reads no config. The --config option
