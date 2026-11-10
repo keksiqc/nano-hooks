@@ -1,26 +1,28 @@
+import { parseArgs as parseNodeArgs } from "node:util";
+
 /** The command names, in the order the help lists them. */
 export const COMMANDS = ["install", "uninstall", "staged", "run"];
 
 /** The command that runs when no command is given. */
 const DEFAULT_COMMAND = "install";
 
-/**
- * Commands that pass their arguments on. The number is how many arguments the command reads
- * itself: the rest go to the command untouched, and their dashes are not read as options.
- */
-const PASSTHROUGH = { run: 1 };
-
-/** The options of `staged`: the spelling, the key in the settings, and the value it sets. */
+/** The options of `staged`: the name, the key in the settings, and the value it sets. */
 export const STAGED_OPTIONS = {
-  "--allow-empty": ["allowEmpty", true],
-  "--bail": ["bail", true],
-  "--no-parallel": ["parallel", false],
-  "--no-restage": ["restage", false],
+  "allow-empty": ["allowEmpty", true],
+  bail: ["bail", true],
+  "no-parallel": ["parallel", false],
+  "no-restage": ["restage", false],
+};
+
+const OPTIONS = {
+  config: { type: "string", short: "c" },
+  help: { type: "boolean", short: "h" },
+  version: { type: "boolean", short: "v" },
+  ...Object.fromEntries(Object.keys(STAGED_OPTIONS).map((name) => [name, { type: "boolean" }])),
 };
 
 /**
- * Options may appear before or after the command. A help or version option wins over every
- * error that comes after it, also over an unknown command.
+ * Options may appear before or after the command. A bad option makes `util.parseArgs` throw.
  *
  * @param {string[]} argv
  * @returns {{action?: "help" | "version", command?: string, name?: string, options: Record<string, unknown>, args: string[]}}
@@ -28,48 +30,24 @@ export const STAGED_OPTIONS = {
  *   instead of `command` when the command is unknown
  */
 export function parseArgs(argv) {
-  const options = {};
-  const staged = []; // options of `staged`, checked once the command is known
-  const args = [];
-  let command;
-  let unknown;
+  const { values, positionals } = parseNodeArgs({
+    args: argv,
+    options: OPTIONS,
+    allowPositionals: true,
+  });
+  if (values.version) return { action: "version" };
+  if (values.help) return { action: "help" };
 
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
+  const [command = DEFAULT_COMMAND, ...args] = positionals;
+  if (!COMMANDS.includes(command)) return { name: command, options: {}, args };
 
-    if (arg === "-v" || arg === "--version") return { action: "version", options, args: [] };
-    if (arg === "-h" || arg === "--help") return { action: "help", options, args: [] };
-    if (arg === "-c" || arg === "--config") {
-      const value = argv[++i];
-      if (!value || value.startsWith("-")) throw new Error(`Option "${arg}" needs a path.`);
-      options.config = value;
-    } else if (arg.startsWith("-")) {
-      if (!(arg in STAGED_OPTIONS)) throw new Error(`Unknown option "${arg}".`);
-      staged.push(arg);
-    } else if (!command && !unknown) {
-      if (COMMANDS.includes(arg)) command = arg;
-      else unknown = arg;
-      if (PASSTHROUGH[command] === 0) {
-        args.push(...argv.slice(i + 1));
-        break;
-      }
-    } else {
-      args.push(arg);
-      if (args.length === PASSTHROUGH[command]) {
-        args.push(...argv.slice(i + 1));
-        break;
-      }
-    }
-  }
+  const maxArgs = command === "run" ? 1 : 0;
+  if (args.length > maxArgs) throw new Error(`Unexpected argument "${args[maxArgs]}".`);
 
-  if (unknown) return { name: unknown, options, args };
-  command ??= DEFAULT_COMMAND;
-  if (PASSTHROUGH[command] === undefined && args.length) {
-    throw new Error(`Unexpected argument "${args[0]}".`);
-  }
-  for (const arg of staged) {
-    if (command !== "staged") throw new Error(`Option "${arg}" only applies to "staged".`);
-    const [key, value] = STAGED_OPTIONS[arg];
+  const options = values.config ? { config: values.config } : {};
+  for (const [name, [key, value]] of Object.entries(STAGED_OPTIONS)) {
+    if (!values[name]) continue;
+    if (command !== "staged") throw new Error(`Option "--${name}" only applies to "staged".`);
     options[key] = value;
   }
   return { command, options, args };

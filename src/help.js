@@ -5,7 +5,7 @@ Commands:
   install (default)  Write the configured git hooks
   uninstall          Remove the hooks nano-hooks manages
   staged             Run the staged step of the pre-commit hook
-  run <hook> [args]  Run one configured git hook now
+  run <hook>         Run one configured git hook now
 
 Options:
   -c, --config <path>  Path to a nano-hooks configuration file
@@ -20,8 +20,4 @@ Options for staged:
 
   These options can also be set in the "pre-commit" hook or in the "options" section of
   the configuration. A command line option wins over the configuration.
-
-Options for run:
-  Arguments after <hook> go to the hook command as $1, $2 and so on, so put
-  --config before <hook>.
 `;

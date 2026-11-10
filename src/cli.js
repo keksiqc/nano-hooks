@@ -63,9 +63,9 @@ const handlers = {
   },
 
   // The hook command prints its own output and decides the exit code.
-  run({ options, args: [hook, ...hookArgs] }) {
+  run({ options, args: [hook] }) {
     if (!hook) throw new Error('Command "run" needs a hook name.');
-    return runHook(hook, hookArgs, { config: options.config });
+    return runHook(hook, { config: options.config });
   },
 };
 

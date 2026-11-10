@@ -359,7 +359,7 @@ describe("pre-commit with staged", () => {
       commit(r);
     },
     "an immediate run": async (r, config) => {
-      expect(await runHook("pre-commit", [], { cwd: r.dir, config })).toBe(0);
+      expect(await runHook("pre-commit", { cwd: r.dir, config })).toBe(0);
     },
   };
   // Double quotes are not allowed in Windows paths.

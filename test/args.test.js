@@ -22,17 +22,17 @@ describe("parseArgs", () => {
     expect(parse("--no-restage", "staged").options).toEqual({ restage: false });
   });
 
-  it("hands everything after the hook name to run", () => {
-    const { command, args, options } = parse("run", "-c", "a.json", "commit-msg", "FILE", "--bail");
+  it("takes the hook name for run", () => {
+    const { command, args, options } = parse("run", "-c", "a.json", "commit-msg");
 
     expect(command).toBe("run");
-    expect(args).toEqual(["commit-msg", "FILE", "--bail"]);
+    expect(args).toEqual(["commit-msg"]);
     expect(options).toEqual({ config: "a.json" });
   });
 
   it("returns the help and version actions as soon as it sees their option", () => {
     expect(parse("staged", "-h").action).toBe("help");
-    expect(parse("-v", "--nope").action).toBe("version");
+    expect(parse("-v").action).toBe("version");
   });
 
   it("returns help over an unknown command", () => {
@@ -52,10 +52,11 @@ describe("parseArgs", () => {
   });
 
   it("rejects unknown options, extra arguments and a missing path", () => {
-    expect(() => parse("staged", "--nope")).toThrow('Unknown option "--nope".');
+    expect(() => parse("staged", "--nope")).toThrow("Unknown option '--nope'");
     expect(() => parse("staged", "extra")).toThrow('Unexpected argument "extra".');
-    expect(() => parse("install", "--config")).toThrow('Option "--config" needs a path.');
-    expect(() => parse("install", "--config", "--bail")).toThrow('Option "--config" needs a path.');
+    expect(() => parse("run", "pre-push", "extra")).toThrow('Unexpected argument "extra".');
+    expect(() => parse("install", "--config")).toThrow("argument missing");
+    expect(() => parse("install", "--config", "--bail")).toThrow("ambiguous");
   });
 });
 
@@ -70,7 +71,12 @@ describe("the command line and the configuration", () => {
 describe("the help text", () => {
   it("names every command and every option", () => {
     for (const command of COMMANDS) expect(HELP).toContain(`  ${command}`);
-    for (const option of [...Object.keys(STAGED_OPTIONS), "--config", "--version", "--help"]) {
+    for (const option of [
+      ...Object.keys(STAGED_OPTIONS).map((n) => `--${n}`),
+      "--config",
+      "--version",
+      "--help",
+    ]) {
       expect(HELP).toContain(option);
     }
   });

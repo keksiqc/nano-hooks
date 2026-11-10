@@ -104,7 +104,7 @@ In a hook, every command runs in a `sh` shell, gets the hook arguments as `$1`, 
 | `nano-hooks` or `nano-hooks install` | Write the configured hooks.                          |
 | `nano-hooks uninstall`               | Remove the hooks that nano-hooks manages.            |
 | `nano-hooks staged`                  | Run the `staged` step of the `pre-commit` hook only. |
-| `nano-hooks run <hook> [args...]`    | Run one configured hook now, with all its steps.     |
+| `nano-hooks run <hook>`              | Run one configured hook now, with all its steps.     |
 
 | Option                | Applies to    | Description                                                    |
 | --------------------- | ------------- | -------------------------------------------------------------- |
@@ -122,7 +122,7 @@ The `uninstall` command does not read the configuration. It accepts `--config` b
 
 The hook script holds your `run` commands as you wrote them. If the hook has a `staged` key, the script first calls `nano-hooks staged`. If you run `nano-hooks install --config <path>`, that call becomes `nano-hooks staged --config <path>`. The script changes only when you run `install`, so run it again after you change a `run` command. The `staged` step reads the configuration each time it runs, so a change to `staged` or to a setting takes effect at once. The hook scripts contain no absolute paths, so they keep working when you move the repository. They find `nano-hooks` in `node_modules/.bin` of the project.
 
-The `run` command runs all steps of the named hook now. For a `pre-commit` object, it runs the `staged` step and then the `run` commands. The `run` commands go to a `sh` shell. For example, `nano-hooks run pre-push` runs the `pre-push` command from your configuration. Arguments after the hook name go to the commands as `$1`, `$2`, and so on. Put `--config` before the hook name. The exit code of the failing step or command becomes the exit code of `run`. The `run` command does not need the hook to be installed, and it ignores `SKIP_NANO_HOOKS`.
+The `run` command runs all steps of the named hook now. For a `pre-commit` object, it runs the `staged` step and then the `run` commands. The `run` commands go to a `sh` shell. For example, `nano-hooks run pre-push` runs the `pre-push` command from your configuration. The exit code of the failing step or command becomes the exit code of `run`. The `run` command does not need the hook to be installed, and it ignores `SKIP_NANO_HOOKS`.
 
 The `staged` command runs only the `staged` step of the `pre-commit` hook, and not the `run` commands. Use it if you write your own Git hook, for example with another hook manager, or to test your patterns by hand.
 

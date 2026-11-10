@@ -7,15 +7,13 @@ import { runConfiguredStaged } from "./staged.js";
 
 /**
  * Run one hook now, as git would. The steps of the hook, such as `staged`, run first. Then
- * the `run` commands run in a `sh` shell with the output shown as it happens, and `args`
- * become their `$1`, `$2`, and so on. A step that fails stops the hook. Unlike an
- * installed hook, it ignores `SKIP_NANO_HOOKS`.
+ * the `run` commands run in a `sh` shell with the output shown as it happens. A step that
+ * fails stops the hook. Unlike an installed hook, it ignores `SKIP_NANO_HOOKS`.
  * @param {string} name a git hook name, such as `pre-commit`
- * @param {string[]} [args] arguments git would pass to that hook
  * @param {{ cwd?: string, config?: string }} [options]
  * @returns {Promise<number>} the exit code of the command
  */
-export async function runHook(name, args = [], { cwd = process.cwd(), config } = {}) {
+export async function runHook(name, { cwd = process.cwd(), config } = {}) {
   if (!VALID_HOOKS.includes(name)) {
     throw new Error(`Unknown git hook "${name}". Valid hooks: ${VALID_HOOKS.join(", ")}`);
   }
@@ -35,7 +33,7 @@ export async function runHook(name, args = [], { cwd = process.cwd(), config } =
   const env = envWithBin(projectRoot);
 
   return new Promise((resolvePromise, reject) => {
-    const child = spawn("sh", ["-c", commandScript(run), name, ...args], {
+    const child = spawn("sh", ["-c", commandScript(run)], {
       cwd: projectRoot,
       env,
       stdio: "inherit",
