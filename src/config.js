@@ -16,21 +16,11 @@ export const VALID_HOOKS = [
   "post-checkout",
   "post-merge",
   "pre-push",
-  "pre-receive",
-  "update",
-  "proc-receive",
-  "post-receive",
-  "post-update",
   "reference-transaction",
-  "push-to-checkout",
   "pre-auto-gc",
   "post-rewrite",
   "sendemail-validate",
   "fsmonitor-watchman",
-  "p4-changelist",
-  "p4-prepare-changelist",
-  "p4-post-changelist",
-  "p4-pre-submit",
   "post-index-change",
 ];
 
@@ -44,9 +34,6 @@ const OPTIONS = [...SETTINGS, "preserveUnused"];
 
 /** The JSON files to search for, after the `nano-hooks` key of `package.json`. */
 const FILES = ["nano-hooks.config.json", ".nano-hooks.json"];
-
-/** Files that older versions read. They are not read now, so finding one is an error. */
-const LEGACY_FILES = [".nano-hooks.js", ".nano-hooks.mjs"];
 
 export const isObject = (value) =>
   value !== null && typeof value === "object" && !Array.isArray(value);
@@ -102,13 +89,6 @@ function readFile(cwd, file) {
  * configurations and only one can be right.
  */
 export function findConfig(cwd) {
-  const legacy = LEGACY_FILES.find((file) => existsSync(join(cwd, file)));
-  if (legacy) {
-    throw new Error(
-      `Found ${legacy}. nano-hooks reads only JSON configuration. Move it to the "nano-hooks" key of package.json or to ${FILES[0]}, then delete ${legacy}. See MIGRATION.md.`,
-    );
-  }
-
   const found = [];
   const pkg = join(cwd, "package.json");
   if (existsSync(pkg)) {
@@ -176,17 +156,6 @@ function validateHook(name, value) {
   return problems;
 }
 
-/** The hint for a top-level key that version 0.4 read, or nothing for any other key. */
-function migrationHint(key) {
-  if (key === "hooks") {
-    return 'hooks: removed. Put each hook at the top level, for example "pre-commit": "pnpm lint". See MIGRATION.md.';
-  }
-  if (key === "preserveUnused") return "preserveUnused: moved to options.preserveUnused";
-  if (key === "staged") {
-    return `staged: moved into the "${STAGED_HOOK}" hook, as in "${STAGED_HOOK}": { "staged": ... }. See MIGRATION.md.`;
-  }
-}
-
 /** Collect every problem in the config, as lines naming the offending key. */
 function validate(raw) {
   if (!isObject(raw)) return ["configuration must be an object"];
@@ -198,8 +167,6 @@ function validate(raw) {
     if (key === "options") continue;
     if (VALID_HOOKS.includes(key)) {
       problems.push(...validateHook(key, value));
-    } else if (migrationHint(key)) {
-      problems.push(migrationHint(key));
     } else {
       problems.push(`${key}: unknown key (expected a git hook name or options)`);
       unknownHook = true;

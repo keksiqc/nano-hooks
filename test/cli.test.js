@@ -295,29 +295,6 @@ describe("nano-hooks run with a pre-commit object", () => {
   });
 });
 
-describe("old configuration", () => {
-  it("is rejected with a hint, and install keeps the hooks that exist", () => {
-    const r = repo({ ".nano-hooks.json": JSON.stringify({ "pre-commit": "echo a" }) });
-    expect(nano(r, "install").status).toBe(0);
-    r.write(".nano-hooks.json", JSON.stringify({ hooks: { "pre-commit": "echo a" } }));
-
-    const result = nano(r, "install");
-
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain("hooks: removed. Put each hook at the top level");
-    expect(existsSync(join(r.dir, ".git/hooks/pre-commit"))).toBe(true);
-  });
-
-  it("is rejected when it is a .nano-hooks.mjs file", () => {
-    const r = repo({ ".nano-hooks.mjs": "export default {};\n" });
-
-    const result = nano(r, "install");
-
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain("Found .nano-hooks.mjs. nano-hooks reads only JSON");
-  });
-});
-
 /** A script that appends `name` to the file `order`. */
 const appendScript = (name) => `require("node:fs").appendFileSync("order", "${name}");\n`;
 

@@ -55,21 +55,6 @@ describe("loadConfig", () => {
     );
   });
 
-  it.each([".nano-hooks.js", ".nano-hooks.mjs"])("rejects the old file %s", async (name) => {
-    const r = repo({ [name]: "export default {};\n" });
-
-    await expect(loadConfig(r.dir)).rejects.toThrow(`Found ${name}. nano-hooks reads only JSON`);
-  });
-
-  it("rejects an old file even when a JSON configuration exists", async () => {
-    const r = repo({
-      ".nano-hooks.js": "export default {};\n",
-      "nano-hooks.config.json": json({ "pre-commit": "x" }),
-    });
-
-    await expect(loadConfig(r.dir)).rejects.toThrow("Found .nano-hooks.js.");
-  });
-
   it("returns empty defaults when no config exists", async () => {
     const r = repo({ "package.json": json({ name: "x" }) });
 
@@ -233,24 +218,15 @@ describe("hook objects", () => {
   });
 });
 
-describe("migration errors", () => {
-  it("tells where each key of version 0.4 moved", async () => {
+describe("invalid configuration", () => {
+  it("rejects the keys of version 0.4 and the server-side hooks as unknown", async () => {
     const message = await problems({
-      ".nano-hooks.json": json({
-        hooks: { "pre-commit": "x" },
-        staged: { "*.js": "eslint" },
-        preserveUnused: true,
-      }),
+      ".nano-hooks.json": json({ hooks: {}, staged: {}, preserveUnused: true, "pre-receive": "x" }),
     });
 
-    expect(message.split("\n")[0]).toBe("Invalid nano-hooks configuration in .nano-hooks.json:");
-    expect(message).toContain(
-      'hooks: removed. Put each hook at the top level, for example "pre-commit"',
-    );
-    expect(message).toContain('staged: moved into the "pre-commit" hook');
-    expect(message).toContain("preserveUnused: moved to options.preserveUnused");
-    expect(message).toContain("See MIGRATION.md.");
-    expect(message).not.toContain("Valid hooks:");
+    for (const key of ["hooks", "staged", "preserveUnused", "pre-receive"]) {
+      expect(message).toContain(`${key}: unknown key (expected a git hook name or options)`);
+    }
   });
 
   it("reports every problem at once, with a list of the valid hooks for a misspelled one", async () => {
