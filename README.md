@@ -136,6 +136,32 @@ When the commands run, nano-hooks sets aside the unstaged changes in partially s
 
 During a run, nano-hooks saves your changes in two patch files in the Git directory: `nano-hooks.patch` and `nano-hooks_partial.patch`. It deletes them when the run succeeds or when a rollback succeeds. If a rollback or the restoration of your unstaged changes fails, for example because of a merge conflict, nano-hooks keeps the patch files and prints their paths. Run `git apply --unidiff-zero` on a patch file to get your changes back, then delete both files. While these files exist, `nano-hooks staged` stops before it changes anything and prints their paths.
 
+## Benchmarks
+
+These numbers compare `nano-hooks staged` with `lint-staged` and `nano-staged`. Each runner runs `prettier --write` on 10 staged files, five `.js` files and five `.css` files.
+
+```diff
+$ node bench/running-time/index.js
+Median of 20 runs, 10 staged files
+- lint-staged   223 ms
+- nano-staged   201 ms
++ nano-hooks    172 ms
+```
+
+The size of `node_modules` after an `npm install` of the runner alone, with all sub-dependencies:
+
+```diff
+$ node bench/size/index.js
+Size of node_modules after npm install
+- lint-staged   962 kB
+- nano-staged    52 kB
++ nano-hooks     66 kB
+```
+
+The running time includes the time that `prettier` needs, so the difference between the runners is the overhead of the runner. nano-hooks is 14 kB larger than nano-staged because it also installs hooks, runs hook commands, and ships this README. The runs used Node 26 on Linux (WSL2) and the lint-staged and nano-staged versions on npm on 2026-11-10. Your numbers will differ.
+
+To run the benchmarks, run `pnpm bench`. The running-time benchmark installs the runners into a temporary Git repository, so it needs network access. The `nano-hooks` entry is this checkout, packed the way `npm publish` packs it. The benchmarks are adapted from [nano-staged](https://github.com/usmanyunusov/nano-staged/tree/master/bench).
+
 ## Development
 
 This project uses JavaScript modules, pnpm, oxlint, oxfmt, and vitest. It has no build step. The package exports `src/index.js` directly.
