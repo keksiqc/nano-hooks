@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createRenderer } from "../src/renderer.js";
+import { createRenderer, log } from "../src/log.js";
 
 const HIDE_CURSOR = "\x1b[?25l";
 const SHOW_CURSOR = "\x1b[?25h";
@@ -48,6 +48,16 @@ function tree() {
 const occurrences = (text, part) => text.split(part).length - 1;
 
 afterEach(() => vi.useRealTimers());
+
+describe("log", () => {
+  it.each(["success", "warn", "info", "error"])("%s writes the message as it is", (kind) => {
+    const stream = memoryStream();
+
+    log[kind]("keep *this* and src/**/*.js", stream);
+
+    expect(stream.text).toMatch(/^\S+ keep \*this\* and src\/\*\*\/\*\.js\n$/);
+  });
+});
 
 describe("createRenderer", () => {
   it("does not loop forever on a terminal that reports width 0", () => {

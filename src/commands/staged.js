@@ -4,8 +4,7 @@ import { styleText } from "node:util";
 import { STAGED_HOOK, hookParts } from "../config.js";
 import { EmptyCommitError, runWithBackup } from "../backup.js";
 import { createGit } from "../git.js";
-import { log } from "../log.js";
-import { createRenderer } from "../renderer.js";
+import { createRenderer, log } from "../log.js";
 import { CommandError, createCommandGroups, runCommandGroups } from "../tasks.js";
 
 /**
@@ -90,7 +89,7 @@ function formatFailures(failures) {
 /** Command output is already formatted; anything else is a plain error line. */
 function report(error, stream) {
   if (error instanceof CommandError) stream.write(`\n${formatFailures(error.failures)}\n`);
-  else log.error(error?.message ?? String(error), { markup: false, stream });
+  else log.error(error?.message ?? String(error), stream);
 }
 
 /**
@@ -130,7 +129,7 @@ export async function runStaged({
 
     const files = await createGit(gitPaths.root).stagedFiles();
     if (!files.working.length) {
-      log.info("No staged files found.", { stream });
+      log.info("No staged files found.", stream);
       return;
     }
 
@@ -146,7 +145,7 @@ export async function runStaged({
       parallel,
       restage,
     });
-    if (!ran) log.info("No files match any configured task.", { stream });
+    if (!ran) log.info("No files match any configured task.", stream);
   } catch (error) {
     const causes = (error instanceof AggregateError ? error.errors : [error]).map(advise);
     for (const cause of causes) report(cause, stream);

@@ -25,20 +25,19 @@ async function installHooks(config) {
   } catch (error) {
     if (!(error instanceof NotGitRepositoryError)) throw error;
     // A `prepare` script must not fail an install where there is no .git directory.
-    log.warn(`${error.message}. Hooks were not installed.`, { markup: false });
+    log.warn(`${error.message}. Hooks were not installed.`);
     return 0;
   }
   const { installed, removed, skipped, hooksDir, external } = result;
   if (external && hasForeignFiles(hooksDir)) {
     log.warn(
       `core.hooksPath points outside .git: ${hooksDir}. Another hooks manager, such as husky, can use the same directory.`,
-      { markup: false },
     );
   }
-  for (const name of installed) log.success(`Installed *${name}*`);
-  for (const name of removed) log.success(`Removed *${name}* (no longer configured)`);
+  for (const name of installed) log.success(`Installed ${name}`);
+  for (const name of removed) log.success(`Removed ${name} (no longer configured)`);
   for (const name of skipped) {
-    log.warn(`Skipped *${name}* because nano-hooks did not write the existing hook`);
+    log.warn(`Skipped ${name} because nano-hooks did not write the existing hook`);
   }
   if (!installed.length && !removed.length && !skipped.length) {
     log.info("No hooks to install.");
@@ -50,8 +49,8 @@ async function installHooks(config) {
 const handlers = {
   async init({ args }) {
     const { command, prepare } = await init({ command: args.join(" ") });
-    log.success(`Added the *nano-hooks* key to package.json`);
-    log.info(`pre-commit runs: ${command}`, { markup: false });
+    log.success(`Added the nano-hooks key to package.json`);
+    log.info(`pre-commit runs: ${command}`);
     if (prepare !== "kept") {
       log.info(`The prepare script ${prepare === "added" ? "is" : "now ends with"} nano-hooks.`);
     }
@@ -64,7 +63,7 @@ const handlers = {
   // is still accepted, so one set of options works for every command.
   async uninstall() {
     const { removed } = await uninstall();
-    for (const name of removed) log.success(`Removed *${name}*`);
+    for (const name of removed) log.success(`Removed ${name}`);
     if (!removed.length) log.info("No nano-hooks hooks found.");
     return 0;
   },
@@ -101,7 +100,7 @@ async function main(argv) {
     }
     return await handlers[command]({ options, args });
   } catch (error) {
-    log.error(error.message, { markup: false });
+    log.error(error.message);
     return 1;
   }
 }
