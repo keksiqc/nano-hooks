@@ -1,11 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "jsPlugins": [
-    {
-      "name": "landmines",
-      "specifier": "@interfere/landmines"
-    }
-  ],
+  "extends": ["./node_modules/@interfere/landmines/configs/recommended.json"],
   "plugins": ["eslint", "unicorn", "oxc", "import", "jsdoc", "node", "vitest"],
   "categories": {
     "correctness": "error",
@@ -13,24 +8,7 @@
     "perf": "warn"
   },
   "rules": {
-    "eslint/no-await-in-loop": "off",
-    "landmines/no-clipboard-read-text": "error",
-    "landmines/no-cold-import-in-test": "error",
-    "landmines/no-cold-start-in-test": "error",
-    "landmines/no-conditional-expect": "error",
-    "landmines/no-elapsed-time-bound": "error",
-    "landmines/no-fixed-sleep": "error",
-    "landmines/no-flake-masking": "error",
-    "landmines/no-imported-mutation": "error",
-    "landmines/no-parameter-branch": "error",
-    "landmines/no-project-max-workers": "error",
-    "landmines/no-self-container-query": "error",
-    "landmines/no-silent-catch": "error",
-    "landmines/no-stale-render-assertion": "error",
-    "landmines/no-styling-class-assertion": "error",
-    "landmines/no-test-doubles": "error",
-    "landmines/no-unsignaled-poll": "error",
-    "landmines/strict-msw": "error"
+    "eslint/no-await-in-loop": "off"
   },
   "env": {
     "builtin": true

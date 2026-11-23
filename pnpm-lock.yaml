@@ -176,8 +176,8 @@ importers:
   .:
     devDependencies:
       '@interfere/landmines':
-        specifier: ^0.1.1
-        version: 0.1.1(oxlint@1.94.0)
+        specifier: ^0.2.1
+        version: 0.2.1(oxlint@1.94.0)
       bumpp:
         specifier: ^12.3.0
         version: 12.3.0
@@ -222,8 +222,8 @@ packages:
   '@emnapi/wasi-threads@1.2.2':
     resolution: {integrity: sha512-c95qOXkHdydNKhscBTebqEC1CVAZpyqOfVfBzQ1qgzyl3gfeldUjIggDbIZgDKsHLgnsM+igH7TJ/eAasaVuMA==}
 
-  '@interfere/landmines@0.1.1':
-    resolution: {integrity: sha512-ClZhJIIMJaibCU11dQru3APhnHtzrfSRFbAfUhisusA/6ueURr1FRjJeu0i1n0Y0lGMwPNTqv9GNspJ23N9/hg==}
+  '@interfere/landmines@0.2.1':
+    resolution: {integrity: sha512-og4Z394nr2o7SUqIR4haAIMKAD6ffNwd5tnNAobZxAatana4oLXX7J+PkDJRiPqAXXswDyDduqrmdWhzhRH9Gw==}
     engines: {node: '>=22.18.0'}
     peerDependencies:
       oxlint: '>=1.81.0'
@@ -1089,11 +1089,12 @@ snapshots:
       tslib: 2.9.1
     optional: true
 
-  '@interfere/landmines@0.1.1(oxlint@1.94.0)':
+  '@interfere/landmines@0.2.1(oxlint@1.94.0)':
     dependencies:
       '@babel/parser': 8.0.4
       '@babel/types': 8.0.4
       '@oxlint/plugins': 1.81.0
+      jsonc-parser: 3.3.1
       oxc-resolver: 11.24.2
       oxlint: 1.94.0
       zod: 4.6.6
