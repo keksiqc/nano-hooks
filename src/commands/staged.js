@@ -106,7 +106,7 @@ export async function runStaged({
     if (!gitPaths.root) throw new Error("Not a git repository.");
 
     const files = await createGit(gitPaths.root).stagedFiles();
-    if (!files.working.length) {
+    if (files.working.length === 0) {
       log.info("No staged files found.", stream);
       return;
     }
@@ -125,7 +125,9 @@ export async function runStaged({
     });
     if (!ran) log.info("No files match any configured task.", stream);
   } catch (error) {
-    const causes = (error instanceof AggregateError ? error.errors : [error]).map(advise);
+    const causes = (error instanceof AggregateError ? error.errors : [error]).map((cause) =>
+      advise(cause),
+    );
     for (const cause of causes) report(cause, stream);
     throw error instanceof AggregateError ? new AggregateError(causes, error.message) : causes[0];
   }

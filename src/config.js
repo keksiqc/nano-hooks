@@ -37,7 +37,8 @@ export const isObject = (value) =>
 const isCommand = (value) => typeof value === "string" && value.trim() !== "";
 /** A command, or a non-empty list of commands. */
 export const isCommandList = (value) =>
-  isCommand(value) || (Array.isArray(value) && value.length > 0 && value.every(isCommand));
+  isCommand(value) ||
+  (Array.isArray(value) && value.length > 0 && value.every((command) => isCommand(command)));
 
 /** The error for a file that cannot be read or parsed. */
 export const readFailure = (path, error) =>
@@ -113,6 +114,37 @@ function validateHook(name, value) {
   return [`${name}: must be a command or a list of commands`];
 }
 
+/** Check `options.preserveUnused`. True when it names an unknown hook. */
+function validatePreserveUnused(value, problems) {
+  if (typeof value === "boolean") return false;
+  if (!Array.isArray(value)) {
+    problems.push("options.preserveUnused: must be true, false or a list of hook names");
+    return false;
+  }
+  let unknownHook = false;
+  for (const [i, hook] of value.entries()) {
+    if (VALID_HOOKS.includes(hook)) continue;
+    problems.push(`options.preserveUnused[${i}]: unknown git hook "${hook}"`);
+    unknownHook = true;
+  }
+  return unknownHook;
+}
+
+/** Check the `options` object. True when `preserveUnused` names an unknown hook. */
+function validateOptions(options, problems) {
+  let unknownHook = false;
+  for (const [name, value] of Object.entries(options)) {
+    if (!OPTIONS.includes(name)) {
+      problems.push(`options.${name}: unknown option (expected ${OPTIONS.join(", ")})`);
+    } else if (name === "preserveUnused") {
+      unknownHook = validatePreserveUnused(value, problems) || unknownHook;
+    } else if (typeof value !== "boolean") {
+      problems.push(`options.${name}: must be true or false`);
+    }
+  }
+  return unknownHook;
+}
+
 function validate(raw) {
   if (!isObject(raw)) return ["configuration must be an object"];
 
@@ -134,25 +166,8 @@ function validate(raw) {
   if ("options" in raw) {
     if (!isObject(raw.options)) {
       problems.push("options: must be an object");
-    } else {
-      for (const [name, value] of Object.entries(raw.options)) {
-        if (!OPTIONS.includes(name)) {
-          problems.push(`options.${name}: unknown option (expected ${OPTIONS.join(", ")})`);
-        } else if (name === "preserveUnused") {
-          if (typeof value === "boolean") continue;
-          if (!Array.isArray(value)) {
-            problems.push("options.preserveUnused: must be true, false or a list of hook names");
-            continue;
-          }
-          value.forEach((hook, i) => {
-            if (VALID_HOOKS.includes(hook)) return;
-            problems.push(`options.preserveUnused[${i}]: unknown git hook "${hook}"`);
-            unknownHook = true;
-          });
-        } else if (typeof value !== "boolean") {
-          problems.push(`options.${name}: must be true or false`);
-        }
-      }
+    } else if (validateOptions(raw.options, problems)) {
+      unknownHook = true;
     }
   }
 
@@ -167,12 +182,18 @@ function validate(raw) {
  * `hooks` holds each hook as written, a command or a list of commands. `staged` is the
  * top-level `staged` key, or undefined.
  */
-export async function loadConfig(cwd = process.cwd(), { file } = {}) {
+export function loadConfig(cwd = process.cwd(), { file } = {}) {
+  return new Promise((done) => {
+    done(loadConfigSync(cwd, file));
+  });
+}
+
+function loadConfigSync(cwd, file) {
   const found = file ? readFile(cwd, file) : findConfig(cwd);
   if (!found) return { hooks: {}, preserveUnused: false, options: {} };
 
   const problems = validate(found.raw);
-  if (problems.length) {
+  if (problems.length > 0) {
     const lines = problems.map((problem) => `  ${problem}`);
     throw new Error([`Invalid nano-hooks configuration in ${found.file}:`, ...lines].join("\n"));
   }

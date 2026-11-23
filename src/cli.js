@@ -36,7 +36,7 @@ async function installHooks(config) {
   for (const name of skipped) {
     log.warn(`Skipped ${name} because nano-hooks did not write the existing hook`);
   }
-  if (!installed.length && !removed.length && !skipped.length) {
+  if (installed.length === 0 && removed.length === 0 && skipped.length === 0) {
     log.info("No hooks to install.");
   }
   return 0;
@@ -48,7 +48,7 @@ const handlers = {
   async uninstall() {
     const { removed } = await uninstall();
     for (const name of removed) log.success(`Removed ${name}`);
-    if (!removed.length) log.info("No nano-hooks hooks found.");
+    if (removed.length === 0) log.info("No nano-hooks hooks found.");
     return 0;
   },
 

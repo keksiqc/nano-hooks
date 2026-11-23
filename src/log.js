@@ -10,8 +10,8 @@ const symbols = {
 };
 
 const SPINNER = ["-", "\\", "|", "/"];
-const HIDE_CURSOR = "\x1b[?25l";
-const SHOW_CURSOR = "\x1b[?25h";
+const HIDE_CURSOR = "\x1B[?25l";
+const SHOW_CURSOR = "\x1B[?25h";
 const FRAME_INTERVAL = 130;
 
 const line =
@@ -52,6 +52,20 @@ function tree(tasks, frame, level = 0) {
     .join("\n");
 }
 
+function leaves(list, printed, parents = []) {
+  let output = "";
+  for (const task of list) {
+    const chain = [...parents, title(task)];
+    if (task.tasks) {
+      output += leaves(task.tasks, printed, chain);
+    } else if (task.state && task.state !== "run" && !printed.has(task)) {
+      printed.add(task);
+      output += `${symbol(task)} ${chain.join(styleText("yellow", " ≫ "))}\n`;
+    }
+  }
+  return output;
+}
+
 /**
 /**
  * Draw a task list to `stream`: redrawn in place on a terminal, appended otherwise. A task is
@@ -65,24 +79,10 @@ export function createRenderer(stream, { isTTY = true, quiet = false } = {}) {
   let rows = 0;
   let timer;
 
-  function leaves(list, parents = []) {
-    let output = "";
-    for (const task of list) {
-      const chain = [...parents, title(task)];
-      if (task.tasks) {
-        output += leaves(task.tasks, chain);
-      } else if (task.state && task.state !== "run" && !printed.has(task)) {
-        printed.add(task);
-        output += `${symbol(task)} ${chain.join(styleText("yellow", " ≫ "))}\n`;
-      }
-    }
-    return output;
-  }
-
   function render(last = false) {
     if (quiet) return;
     if (!isTTY) {
-      stream.write(leaves(tasks));
+      stream.write(leaves(tasks, printed));
       return;
     }
 

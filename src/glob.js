@@ -1,4 +1,5 @@
-const escapeChar = (char) => char.replace(/[\\^$.*+?()[\]{}|/-]/g, "\\$&");
+const escapeChar = (char) => char.replaceAll(/[\\^$.*+?()[\]{}|/]/gu, "\\$&");
+const escapeClassChar = (char) => (char === "-" ? "\\-" : escapeChar(char));
 
 function bracketEnd(str, start) {
   let pos = start + 1;
@@ -66,7 +67,7 @@ function bracket(body) {
     const char = chars[pos];
     if (char === "\\" && pos + 1 < chars.length) {
       const escaped = chars[++pos];
-      set += /\w/.test(escaped) ? escaped : `\\${escaped}`;
+      set += /\w/u.test(escaped) ? escaped : escapeClassChar(escaped);
     } else {
       set += "]^\\[".includes(char) ? `\\${char}` : char;
     }
@@ -123,7 +124,7 @@ function compile(pattern) {
 /** Convert a glob to an anchored RegExp. Throws for a group like `!(a)`. */
 export function globToRegex(glob) {
   const sources = expandBraces(glob).map((pattern) => compile(pattern));
-  return new RegExp(`^(?:${sources.join("|")})$`);
+  return new RegExp(`^(?:${sources.join("|")})$`, "u");
 }
 
 /**

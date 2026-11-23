@@ -50,7 +50,7 @@ describe("runWithBackup", () => {
     partiallyStage(r);
     r.write("b.js", "untouched change\n");
 
-    const { promise, steps } = await work(r, async () => r.write("a.js", "UNO\ntwo\nthree\n"));
+    const { promise, steps } = await work(r, () => r.write("a.js", "UNO\ntwo\nthree\n"));
     await promise;
 
     expect(r.git("show", ":a.js")).toBe("UNO\ntwo\nthree\n");
@@ -58,7 +58,7 @@ describe("runWithBackup", () => {
     expect(r.read("b.js")).toBe("untouched change\n");
     expect(existsSync(patchPaths(r).original)).toBe(false);
     expect(existsSync(patchPaths(r).unstaged)).toBe(false);
-    expect(steps.map((step) => step.state)).toEqual(Array(steps.length).fill("done"));
+    expect(steps.map((step) => step.state)).toEqual(steps.map(() => "done"));
   });
 
   it("reports each step to the observer in order", async () => {
@@ -88,7 +88,7 @@ describe("runWithBackup", () => {
       a: r.read("a.js"),
     };
 
-    const { promise } = await work(r, async () => {
+    const { promise } = await work(r, () => {
       r.write("a.js", "garbage\n");
       throw new Error("task failed");
     });
@@ -107,7 +107,7 @@ describe("runWithBackup", () => {
     const r = repo({ "a.js": "one\ntwo\nthree\n" });
     partiallyStage(r);
 
-    const { promise } = await work(r, async () => {
+    const { promise } = await work(r, () => {
       writeFileSync(join(r.dir, ".git", "index.lock"), "");
       throw new Error("task failed");
     });
@@ -128,7 +128,7 @@ describe("runWithBackup", () => {
     r.git("add", "a.js");
     r.write("a.js", "uno\ntwo\nthree\n");
 
-    const { promise, steps } = await work(r, async () => r.write("a.js", "UNO-X\ntwo\nthree\n"));
+    const { promise, steps } = await work(r, () => r.write("a.js", "UNO-X\ntwo\nthree\n"));
     const messages = (await errorsOf(promise)).map((error) => error.message);
 
     expect(messages[0]).toContain("A merge conflict occurred");
@@ -142,7 +142,7 @@ describe("runWithBackup", () => {
     const r = repo({ "a.js": "one\ntwo\nthree\n" });
     partiallyStage(r);
 
-    const { promise } = await work(r, async () => {
+    const { promise } = await work(r, () => {
       rmSync(patchPaths(r).unstaged);
       mkdirSync(join(patchPaths(r).unstaged, "x"), { recursive: true });
       throw new Error("task failed");
@@ -162,7 +162,7 @@ describe("runWithBackup", () => {
 
     const { promise, steps } = await work(
       r,
-      async () => {
+      () => {
         ran = true;
       },
       { dotPath: join(r.dir, "missing") },
@@ -183,7 +183,7 @@ describe("runWithBackup", () => {
     const worktree = r.read("a.js");
     let ran = false;
 
-    const { promise, steps } = await work(r, async () => {
+    const { promise, steps } = await work(r, () => {
       ran = true;
     });
     const [error] = await errorsOf(promise);
@@ -201,7 +201,7 @@ describe("runWithBackup", () => {
     const r = repo({ "a.js": "x\n" });
     r.write("a.js", "y\n");
     r.git("add", "a.js");
-    const reset = async () => r.write("a.js", "x\n");
+    const reset = () => r.write("a.js", "x\n");
 
     const first = await work(r, reset);
     expect((await errorsOf(first.promise))[0].message).toContain("The commit would be empty");
@@ -216,7 +216,7 @@ describe("runWithBackup", () => {
     r.write("a.js", "y\n");
     r.git("add", "a.js");
     r.write("b.js", "unrelated unstaged edit\n");
-    const reset = async () => r.write("a.js", "x\n");
+    const reset = () => r.write("a.js", "x\n");
 
     const { promise } = await work(r, reset);
 
@@ -230,7 +230,7 @@ describe("runWithBackup", () => {
     r.write("a.js", "y\n");
     r.git("add", "a.js");
     r.git("rm", "-q", "b.js");
-    const reset = async () => r.write("a.js", "x\n");
+    const reset = () => r.write("a.js", "x\n");
 
     const { promise } = await work(r, reset);
     await promise;

@@ -9,6 +9,9 @@ import { uninstall } from "../src/commands/uninstall.js";
 import { install } from "../src/hooks.js";
 import { FAIL, FMT, linkCli, testRepo, testTempDir } from "./helpers.js";
 
+// A double quote is not a valid character in a Windows path.
+const DIR_WITH_SPACE_AND_QUOTE = process.platform === "win32" ? "my proj it's" : `my "proj" it's`;
+
 const repo = (hooks = {}, options, extra = {}) =>
   testRepo({ ".nano-hooks.json": JSON.stringify({ ...hooks, ...extra }) }, options);
 
@@ -120,14 +123,14 @@ describe("install", () => {
 
     commit(r);
 
-    expect(r.read("order").split(/\s+/).filter(Boolean)).toEqual(["1", "2", "3"]);
+    expect(r.read("order").split(/\s+/u).filter(Boolean)).toEqual(["1", "2", "3"]);
   });
 
   it("stops a list at the first failing command and fails the hook", async () => {
     const r = repo({ "pre-commit": ["echo 1 >> order", "exit 3", "echo 2 >> order"] });
     await install({ cwd: r.dir });
 
-    expect(() => commit(r)).toThrow(/Command failed/);
+    expect(() => commit(r)).toThrow(/Command failed/u);
     expect(r.read("order").trim()).toBe("1");
   });
 
@@ -135,7 +138,7 @@ describe("install", () => {
     const r = repo({ "pre-commit": ["false || false", "touch ran"] });
     await install({ cwd: r.dir });
 
-    expect(() => commit(r)).toThrow(/Command failed/);
+    expect(() => commit(r)).toThrow(/Command failed/u);
     expect(existsSync(join(r.dir, "ran"))).toBe(false);
   });
 
@@ -277,19 +280,18 @@ describe("install", () => {
     await install({ cwd: r.dir });
     writeFileSync(join(r.dir, ".nano-hooks.json"), "{ not json");
 
-    await expect(install({ cwd: r.dir })).rejects.toThrow(/\.nano-hooks\.json/);
+    await expect(install({ cwd: r.dir })).rejects.toThrow(/\.nano-hooks\.json/u);
     expect(existsSync(hookPath(r, "pre-commit"))).toBe(true);
   });
 
   it("rejects outside a git repository", async () => {
     const t = testTempDir();
 
-    await expect(install({ cwd: t.dir })).rejects.toThrow(/Not a git repository/);
+    await expect(install({ cwd: t.dir })).rejects.toThrow(/Not a git repository/u);
   });
 
   it("works when the project path contains spaces and a quote", async () => {
-    const dirName = process.platform === "win32" ? "my proj it's" : `my "proj" it's`;
-    const r = repo({ "pre-commit": "touch ran" }, { dirName });
+    const r = repo({ "pre-commit": "touch ran" }, { dirName: DIR_WITH_SPACE_AND_QUOTE });
     await install({ cwd: r.dir });
 
     commit(r);
@@ -338,7 +340,7 @@ describe("hooks that call staged", () => {
     r.write("a.js", "uno\n");
     r.git("add", "a.js");
 
-    expect(() => commit(r)).toThrow(/Command failed/);
+    expect(() => commit(r)).toThrow(/Command failed/u);
     expect(existsSync(join(r.dir, "ran"))).toBe(false);
   });
 
@@ -370,7 +372,7 @@ describe("hooks that call staged", () => {
       expect(await runHook("pre-commit", { cwd: r.dir, config })).toBe(0);
     },
   };
-  const dirName = process.platform === "win32" ? "my proj it's" : `my "proj" it's`;
+  const dirName = DIR_WITH_SPACE_AND_QUOTE;
   const configFile = "it's config.json";
   const call = `nano-hooks staged --config "${configFile}"`;
   const staged = { "*.js": "node fmt.js" };

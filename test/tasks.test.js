@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 
 import { describe, expect, it } from "vitest";
 
@@ -97,19 +98,16 @@ describe("createCommandGroups", () => {
 
 function groups(log) {
   return ["a", "b"].map((name) => {
-    const group = { title: name, fileCount: 1 };
-    group.tasks = [
-      {
-        title: name,
-        pattern: name,
-        run: async () => {
-          log.push(`start ${name}`);
-          await new Promise((resolve) => setTimeout(resolve, 20));
-          log.push(`end ${name}`);
-        },
+    const task = {
+      title: name,
+      pattern: name,
+      run: async () => {
+        log.push(`start ${name}`);
+        await sleep(20);
+        log.push(`end ${name}`);
       },
-    ];
-    return group;
+    };
+    return { title: name, fileCount: 1, tasks: [task] };
   });
 }
 
@@ -133,13 +131,11 @@ describe("runCommandGroups", () => {
   it("skips the later groups after a failure with bail and parallel: false", async () => {
     const log = [];
     const [first, second] = groups(log);
-    first.tasks[0].run = async () => {
-      throw new Error("boom");
-    };
+    first.tasks[0].run = () => Promise.reject(new Error("boom"));
 
     await expect(
       runCommandGroups([first, second], { parallel: false, bail: true }),
-    ).rejects.toThrow(/boom/);
+    ).rejects.toThrow(/boom/u);
     expect(log).toEqual([]);
     expect(second.state).toBe("warn");
   });
@@ -150,7 +146,7 @@ function command(pattern, title, { fail = false } = {}) {
     title,
     pattern,
     run: async () => {
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await sleep(10);
       if (fail) throw new Error(`${title} broke\n`);
     },
   };
@@ -251,7 +247,7 @@ describe("task outcomes", () => {
       "*.md",
     ]);
     // oxlint-disable-next-line no-control-regex
-    expect(error.message).not.toMatch(/\u001b/);
+    expect(error.message).not.toMatch(/\u001B/u);
     expect(error.message).toBe("*.js > lint:\nlint broke");
   });
 });

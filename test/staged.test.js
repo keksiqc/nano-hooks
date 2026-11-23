@@ -4,8 +4,8 @@ import { PassThrough } from "node:stream";
 
 import { describe, expect, it } from "vitest";
 
-import { FAIL, FMT, MARK, RESET, testRepo, testTempDir } from "../../../test/helpers.js";
-import { runStaged } from "../staged.js";
+import { runStaged } from "../src/commands/staged.js";
+import { FAIL, FMT, MARK, RESET, testRepo, testTempDir } from "./helpers.js";
 
 const repo = (files, options) =>
   testRepo(
@@ -112,7 +112,7 @@ describe("runStaged", () => {
     r.write("a.js", "uno\n");
     r.git("add", "a.js");
 
-    expect(await failure(run(r))).toMatch(/No staged tasks configured/);
+    expect(await failure(run(r))).toMatch(/No staged tasks configured/u);
   });
 
   it("leaves the changes of the commands out of the index with restage: false", async () => {

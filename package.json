@@ -15,8 +15,7 @@
     "nano-hooks": "./src/cli.js"
   },
   "files": [
-    "src",
-    "!src/**/test"
+    "src"
   ],
   "type": "module",
   "sideEffects": false,

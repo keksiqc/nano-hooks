@@ -1,13 +1,12 @@
 import { execFile } from "node:child_process";
 import { lstat, mkdtemp, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-export const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+export const root = resolve(import.meta.dirname, "..");
 
 /** The runners to compare. `nano-hooks` is this checkout, the other two come from npm. */
 export const RUNNERS = [
@@ -42,8 +41,8 @@ export async function packLocal(destination) {
 }
 
 /** Resolve what to hand to `npm install` for a runner. */
-export async function installSpec(runner, tarballDir) {
-  return runner.local ? packLocal(tarballDir) : runner.spec;
+export function installSpec(runner, tarballDir) {
+  return runner.local ? packLocal(tarballDir) : Promise.resolve(runner.spec);
 }
 
 /** Install the packages into a project directory, without scripts, audit or funding noise. */

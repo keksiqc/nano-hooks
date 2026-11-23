@@ -47,9 +47,12 @@ describe("loadConfig", () => {
     ["nano-hooks.config.json", ".nano-hooks.json"],
   ])("rejects a project with both %s and %s", async (first, second) => {
     const config = { "pre-commit": "x" };
-    const file = (name) =>
-      name === "package.json" ? json({ "nano-hooks": config }) : json(config);
-    const r = repo({ [first]: file(first), [second]: file(second) });
+    const contents = {
+      "package.json": json({ "nano-hooks": config }),
+      "nano-hooks.config.json": json(config),
+      ".nano-hooks.json": json(config),
+    };
+    const r = repo({ [first]: contents[first], [second]: contents[second] });
 
     await expect(loadConfig(r.dir)).rejects.toThrow(
       `Found more than one nano-hooks configuration: ${first}, ${second}.`,
@@ -230,7 +233,7 @@ describe("invalid configuration", () => {
   it("names the file when the config cannot be parsed", async () => {
     const message = await problems({ ".nano-hooks.json": "{ not json" });
 
-    expect(message).toMatch(/^Failed to read .*\.nano-hooks\.json: /);
+    expect(message).toMatch(/^Failed to read .*\.nano-hooks\.json: /u);
   });
 });
 

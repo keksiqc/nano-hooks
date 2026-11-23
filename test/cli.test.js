@@ -59,7 +59,7 @@ describe("nano-hooks staged", () => {
 
     const result = nano(r, "staged");
 
-    expect(result.stderr).not.toContain("\x1b[?25");
+    expect(result.stderr).not.toContain("\x1B[?25");
   });
 
   it("exits 1 when a command fails", () => {
@@ -84,7 +84,7 @@ describe("nano-hooks staged", () => {
     const result = nano(r, "staged");
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toMatch(/No staged tasks configured/);
+    expect(result.stderr).toMatch(/No staged tasks configured/u);
   });
 
   it("exits 1 and lists the problems when the config is invalid", () => {
@@ -390,7 +390,7 @@ describe("nano-hooks install / uninstall", () => {
     const result = nano(r, "install");
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toMatch(/^× Invalid nano-hooks configuration in \.nano-hooks\.json:\n/);
+    expect(result.stderr).toMatch(/^× Invalid nano-hooks configuration in \.nano-hooks\.json:\n/u);
     expect(result.stderr).toContain("pre-comit: unknown key");
   });
 
@@ -420,7 +420,7 @@ describe("nano-hooks install / uninstall", () => {
     const result = nanoWith(r, { cwd: join(r.dir, "..") }, "install");
 
     expect(result.status).toBe(0);
-    expect(result.stderr).toMatch(/^↓ Not a git repository: .+\. Hooks were not installed\.\n$/);
+    expect(result.stderr).toMatch(/^↓ Not a git repository: .+\. Hooks were not installed\.\n$/u);
   });
 
   it("install does nothing when NANO_HOOKS=0", () => {

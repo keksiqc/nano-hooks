@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createRenderer, log } from "../src/log.js";
 
-const HIDE_CURSOR = "\x1b[?25l";
-const SHOW_CURSOR = "\x1b[?25h";
+const HIDE_CURSOR = "\x1B[?25l";
+const SHOW_CURSOR = "\x1B[?25h";
 const FRAME = 130;
 
 function memoryStream(options = {}) {
@@ -54,26 +54,32 @@ describe("log", () => {
 
     log[kind]("keep *this* and src/**/*.js", stream);
 
-    expect(stream.text).toMatch(/^\S+ keep \*this\* and src\/\*\*\/\*\.js\n$/);
+    expect(stream.text).toMatch(/^\S+ keep \*this\* and src\/\*\*\/\*\.js\n$/u);
   });
 });
 
+/** A terminal of width 0 that throws when it gets too many writes. */
+function runawayStream() {
+  const stream = {
+    isTTY: true,
+    columns: 0,
+    writes: 0,
+    write() {
+      if (++stream.writes > 1000) throw new Error("runaway clear loop");
+    },
+  };
+  return stream;
+}
+
 describe("createRenderer", () => {
   it("does not loop forever on a terminal that reports width 0", () => {
-    let writes = 0;
-    const stream = {
-      isTTY: true,
-      columns: 0,
-      write() {
-        if (++writes > 1000) throw new Error("runaway clear loop");
-      },
-    };
+    const stream = runawayStream();
     const renderer = createRenderer(stream, { isTTY: true });
 
     renderer.start({ title: "task", state: "run" });
     renderer.stop();
 
-    expect(writes).toBeLessThan(100);
+    expect(stream.writes).toBeLessThan(100);
   });
 
   it.each([

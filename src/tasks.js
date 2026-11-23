@@ -38,7 +38,7 @@ export function chunkFiles(files, usedLength, maxLength = MAX_ARG_LENGTH) {
   let length = usedLength;
 
   for (const file of files) {
-    if (chunk.length && length + file.length + 1 > maxLength) {
+    if (chunk.length > 0 && length + file.length + 1 > maxLength) {
       chunks.push(chunk);
       chunk = [];
       length = usedLength;
@@ -46,7 +46,7 @@ export function chunkFiles(files, usedLength, maxLength = MAX_ARG_LENGTH) {
     chunk.push(file);
     length += file.length + 1;
   }
-  if (chunk.length) chunks.push(chunk);
+  if (chunk.length > 0) chunks.push(chunk);
 
   return chunks;
 }
@@ -79,22 +79,30 @@ export function createCommandGroups({
       })
       .map((file) => resolve(cwd, file));
 
-    const lines = matched.length ? [].concat(commands) : [];
-    const suffix = matched.length
-      ? `${matched.length} ${matched.length > 1 ? "files" : "file"}`
-      : "no files";
+    const lines = matched.length > 0 ? [].concat(commands) : [];
+    const suffix =
+      matched.length > 0
+        ? `${matched.length} ${matched.length > 1 ? "files" : "file"}`
+        : "no files";
 
-    const group = { title: pattern, detail: suffix, fileCount: matched.length };
-    group.tasks = lines.map((line) => ({
-      title: line,
-      pattern,
-      run: async (signal) => {
-        for (const chunk of chunkFiles(matched, line.length, maxArgLength)) {
-          await run("sh", ["-c", `${line} "$@"`, "sh", ...chunk], { cwd: rootPath, env, signal });
-        }
-      },
-    }));
-    groups.push(group);
+    groups.push({
+      title: pattern,
+      detail: suffix,
+      fileCount: matched.length,
+      tasks: lines.map((line) => ({
+        title: line,
+        pattern,
+        run: async (signal) => {
+          for (const chunk of chunkFiles(matched, line.length, maxArgLength)) {
+            await run("sh", ["-c", `${line} "$@"`, "sh", ...chunk], {
+              cwd: rootPath,
+              env,
+              signal,
+            });
+          }
+        },
+      })),
+    });
   }
 
   return groups;
@@ -146,7 +154,7 @@ export async function runCommandGroups(groups, { bail = false, parallel = true }
 
     group.state = "run";
     const failed = await runCommands(group, controller?.signal);
-    if (failed.length) {
+    if (failed.length > 0) {
       group.state = "fail";
       failures.push(...failed);
       controller?.abort();
@@ -156,10 +164,10 @@ export async function runCommandGroups(groups, { bail = false, parallel = true }
   };
 
   if (parallel) {
-    await Promise.all(groups.map(runGroup));
+    await Promise.all(groups.map((group) => runGroup(group)));
   } else {
     for (const group of groups) await runGroup(group);
   }
 
-  if (failures.length) throw new CommandError(failures);
+  if (failures.length > 0) throw new CommandError(failures);
 }

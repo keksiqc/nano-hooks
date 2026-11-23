@@ -50,28 +50,74 @@ const isInside = (parent, child) => {
   return path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path);
 };
 
-/**
+async function readHooksInfo(cwd, exec) {
+  try {
+    const out = await exec(["rev-parse", "--git-path", "hooks", "--git-common-dir"]);
+    const [hooks, common] = out.split(/\r?\n/u);
+    const dir = resolve(cwd, hooks);
+    return { dir, external: !isInside(realPath(resolve(cwd, common)), realPath(dir)) };
+  } catch (error) {
+    if (/not a git repository/iu.test(error.message)) {
+      throw new NotGitRepositoryError(`Not a git repository: ${cwd}`, { cause: error });
+    }
+    throw error;
+  }
+}
+
+async function readGitPaths(exec) {
+  delete process.env.GIT_DIR;
+  delete process.env.GIT_WORK_TREE;
+
+  try {
+    const out = await exec(["rev-parse", "--show-toplevel", "--absolute-git-dir"]);
+    const [root, dot] = out.split(/\r?\n/u);
+    return root && dot ? { root: normalize(root), dot: normalize(dot) } : { root: null, dot: null };
+  } catch {
+    return { root: null, dot: null };
+  }
+}
+
+async function checkWouldChange(cwd, exec, paths) {
+  const index = resolve(cwd, (await exec(["rev-parse", "--git-path", "index"])).trim());
+  const copy = `${index}.nano-hooks-check`;
+  const env = { GIT_INDEX_FILE: copy };
+  try {
+    if (existsSync(index)) copyFileSync(index, copy);
+    if (paths.length > 0) await exec(["add", "-A", "--", ...paths], { env });
+    return (await exec(["diff", "--cached", "--name-only"], { env })).trim() !== "";
+  } finally {
+    rmSync(copy, { force: true });
+  }
+}
+
+async function readStagedFiles(exec) {
+  const raw = await exec(["status", "-z", "-u"], { env: { GIT_OPTIONAL_LOCKS: "0" } });
+  const working = new Set();
+  const changed = [];
+  const deleted = [];
+
+  for (const { x, y, path } of parseStatus(raw)) {
+    if (!"AMRC".includes(x) || working.has(path)) continue;
+
+    working.add(path);
+    if ("ACMR".includes(y)) changed.push(path);
+    else if (y === "D") deleted.push(path);
+  }
+
+  return { working: [...working], changed, deleted };
+}
+
 /** Bind the git helpers to a directory. */
 export function createGit(cwd = process.cwd()) {
   const exec = (args, options = {}) => run("git", args, { cwd, ...options });
-
-  const hooksInfo = async () => {
-    try {
-      const out = await exec(["rev-parse", "--git-path", "hooks", "--git-common-dir"]);
-      const [hooks, common] = out.split(/\r?\n/);
-      const dir = resolve(cwd, hooks);
-      return { dir, external: !isInside(realPath(resolve(cwd, common)), realPath(dir)) };
-    } catch (error) {
-      if (/not a git repository/i.test(error.message)) {
-        throw new NotGitRepositoryError(`Not a git repository: ${cwd}`, { cause: error });
-      }
-      throw error;
-    }
-  };
+  const hooksInfo = () => readHooksInfo(cwd, exec);
 
   return {
     exec,
     hooksInfo,
+    getGitPaths: () => readGitPaths(exec),
+    wouldChange: (paths) => checkWouldChange(cwd, exec, paths),
+    stagedFiles: () => readStagedFiles(exec),
 
     async toplevel() {
       return (await exec(["rev-parse", "--show-toplevel"])).trim();
@@ -81,29 +127,9 @@ export function createGit(cwd = process.cwd()) {
       return (await hooksInfo()).dir;
     },
 
-    async getGitPaths() {
-      delete process.env.GIT_DIR;
-      delete process.env.GIT_WORK_TREE;
-
-      try {
-        const out = await exec(["rev-parse", "--show-toplevel", "--absolute-git-dir"]);
-        const [root, dot] = out.split(/\r?\n/);
-        return root && dot
-          ? { root: normalize(root), dot: normalize(dot) }
-          : { root: null, dot: null };
-      } catch {
-        return { root: null, dot: null };
-      }
-    },
-
     async diff(output, files = []) {
-      await exec([
-        "diff",
-        ...DIFF_ARGS,
-        "--output",
-        output,
-        ...(files.length ? ["--", ...files] : []),
-      ]);
+      const paths = files.length > 0 ? ["--", ...files] : [];
+      await exec(["diff", ...DIFF_ARGS, "--output", output, ...paths]);
     },
 
     async apply(patch, { threeWay = false } = {}) {
@@ -111,41 +137,11 @@ export function createGit(cwd = process.cwd()) {
     },
 
     async add(paths) {
-      if (paths.length) await exec(["add", "-A", "--", ...paths]);
-    },
-
-    async wouldChange(paths) {
-      const index = resolve(cwd, (await exec(["rev-parse", "--git-path", "index"])).trim());
-      const copy = `${index}.nano-hooks-check`;
-      const env = { GIT_INDEX_FILE: copy };
-      try {
-        if (existsSync(index)) copyFileSync(index, copy);
-        if (paths.length) await exec(["add", "-A", "--", ...paths], { env });
-        return (await exec(["diff", "--cached", "--name-only"], { env })).trim() !== "";
-      } finally {
-        rmSync(copy, { force: true });
-      }
+      if (paths.length > 0) await exec(["add", "-A", "--", ...paths]);
     },
 
     async checkout(paths) {
-      if (paths.length) await exec(["checkout", "-q", "--force", "--", ...paths]);
-    },
-
-    async stagedFiles() {
-      const raw = await exec(["status", "-z", "-u"], { env: { GIT_OPTIONAL_LOCKS: "0" } });
-      const working = new Set();
-      const changed = [];
-      const deleted = [];
-
-      for (const { x, y, path } of parseStatus(raw)) {
-        if (!"AMRC".includes(x) || working.has(path)) continue;
-
-        working.add(path);
-        if ("ACMR".includes(y)) changed.push(path);
-        else if (y === "D") deleted.push(path);
-      }
-
-      return { working: [...working], changed, deleted };
+      if (paths.length > 0) await exec(["checkout", "-q", "--force", "--", ...paths]);
     },
   };
 }

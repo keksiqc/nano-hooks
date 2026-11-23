@@ -28,10 +28,12 @@ export function run(command, args = [], { cwd = process.cwd(), env, signal } = {
     });
 
     let output = "";
-    for (const stream of [child.stdout, child.stderr]) {
+    const collect = (stream) => {
       stream.setEncoding("utf8");
       stream.on("data", (data) => (output += data));
-    }
+    };
+    collect(child.stdout);
+    collect(child.stderr);
 
     child.on("error", reject);
     child.on("close", (code) => {
