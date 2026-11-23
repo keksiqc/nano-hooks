@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
+
 import { runWithBackup } from "../src/backup.js";
 import { createGit } from "../src/git.js";
 import { FMT, testRepo } from "./helpers.js";

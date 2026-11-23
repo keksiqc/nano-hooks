@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { createMatcher } from "../src/glob.js";
 
 const matches = (glob, file) => createMatcher(glob)(file);

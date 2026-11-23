@@ -3,6 +3,7 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { styleText } from "node:util";
+
 import { RUNNERS, exec, install, installSpec, makeTempDir, median } from "../utils.js";
 
 const ROUNDS = Number(process.argv[2] ?? 10);

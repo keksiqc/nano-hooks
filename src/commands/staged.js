@@ -1,8 +1,9 @@
 // The staged-file runner is based on nano-staged (MIT), see LICENSE.
 import { realpathSync } from "node:fs";
 import { styleText } from "node:util";
-import { STAGED_HOOK, hookParts } from "../config.js";
+
 import { EmptyCommitError, runWithBackup } from "../backup.js";
+import { STAGED_HOOK, hookParts } from "../config.js";
 import { createGit } from "../git.js";
 import { createRenderer, log } from "../log.js";
 import { CommandError, createCommandGroups, runCommandGroups } from "../tasks.js";

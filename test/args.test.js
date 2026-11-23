@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { COMMANDS, STAGED_OPTIONS, parseArgs } from "../src/args.js";
 import { SETTINGS } from "../src/config.js";
 import { HELP } from "../src/help.js";

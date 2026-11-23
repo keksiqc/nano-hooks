@@ -3,6 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { onTestFinished } from "vitest";
 
 export const CLI = fileURLToPath(new URL("../src/cli.js", import.meta.url));

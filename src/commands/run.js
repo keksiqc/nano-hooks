@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
+
 import { VALID_HOOKS, hasStaged, hookParts, loadConfig } from "../config.js";
 import { envWithBin } from "../exec.js";
 import { commandScript } from "../hooks.js";

@@ -1,7 +1,9 @@
 import { existsSync, readFileSync, symlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { PassThrough } from "node:stream";
+
 import { describe, expect, it } from "vitest";
+
 import { runStaged } from "../src/commands/staged.js";
 import { FAIL, FMT, MARK, RESET, testRepo, testTempDir } from "./helpers.js";
 

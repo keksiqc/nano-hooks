@@ -1,7 +1,9 @@
 import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
+
 import { runHook } from "../src/commands/run.js";
 import { uninstall } from "../src/commands/uninstall.js";
 import { install } from "../src/hooks.js";

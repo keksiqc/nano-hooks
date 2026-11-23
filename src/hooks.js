@@ -9,6 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join, relative, resolve } from "node:path";
+
 import { hasStaged, hookParts, loadConfig } from "./config.js";
 import { createGit } from "./git.js";
 

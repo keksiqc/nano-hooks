@@ -1,5 +1,6 @@
 import { existsSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
+
 import { createGit } from "./git.js";
 
 const hasContent = (path) => existsSync(path) && statSync(path).size > 0;

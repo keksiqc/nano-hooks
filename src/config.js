@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, extname, join, resolve } from "node:path";
+
 import { globToRegex } from "./glob.js";
 
 /** Hook names from githooks(5). */

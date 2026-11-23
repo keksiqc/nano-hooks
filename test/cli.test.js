@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
+
 import { FAIL, FMT, RESET, nano, nanoWith, testRepo } from "./helpers.js";
 
 const repo = (files) => testRepo({ "fmt.js": FMT, "fail.js": FAIL, "reset.js": RESET, ...files });

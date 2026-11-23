@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
+
 import { parseArgs } from "./args.js";
 import { runHook } from "./commands/run.js";
 import { runConfiguredStaged } from "./commands/staged.js";

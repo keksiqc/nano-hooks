@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { VALID_HOOKS, hookParts, loadConfig } from "../src/config.js";
 import { testRepo as repo } from "./helpers.js";
 
