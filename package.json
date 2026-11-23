@@ -33,6 +33,7 @@
     "prepare": "nano-hooks"
   },
   "devDependencies": {
+    "@interfere/landmines": "^0.1.1",
     "bumpp": "^12.3.0",
     "nano-hooks": "link:",
     "oxfmt": "^0.79.0",
