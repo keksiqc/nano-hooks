@@ -48,16 +48,9 @@ export function managedHooks(hooksDir) {
     .map((entry) => entry.name);
 }
 
-/**
-/**
- * The project directory relative to the working tree root, with forward slashes, or "".
- * Hooks use it instead of absolute paths, so they keep working when the repository moves.
- */
 async function relativeRoot(projectRoot) {
   try {
     const top = await createGit(projectRoot).toplevel();
-    // The native version also expands Windows short names such as RUNNER~1, which git does
-    // not report, so both paths have the same form.
     return relative(realpathSync.native(top), realpathSync.native(projectRoot)).replaceAll(
       "\\",
       "/",

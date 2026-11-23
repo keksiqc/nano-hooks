@@ -1,5 +1,3 @@
-// Adapted from nano-staged (MIT), see LICENSE.
-// Install each runner alone and add up its node_modules, sub-dependencies included.
 import { rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { styleText } from "node:util";

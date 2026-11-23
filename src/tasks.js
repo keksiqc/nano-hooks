@@ -3,8 +3,6 @@ import { isAbsolute, normalize, relative, resolve } from "node:path";
 import { envWithBin, run } from "./exec.js";
 import { createMatcher } from "./glob.js";
 
-/**
-/** Half the argument limit of the operating system, which leaves room for the environment. */
 const MAX_ARG_LENGTH = ({ darwin: 262_144, win32: 8191 }[process.platform] ?? 131_072) / 2;
 
 /**
@@ -40,7 +38,6 @@ export function chunkFiles(files, usedLength, maxLength = MAX_ARG_LENGTH) {
   let length = usedLength;
 
   for (const file of files) {
-    // One more character for the space between arguments.
     if (chunk.length && length + file.length + 1 > maxLength) {
       chunks.push(chunk);
       chunk = [];
@@ -67,7 +64,6 @@ export function createCommandGroups({
   rootPath,
   maxArgLength = MAX_ARG_LENGTH,
 }) {
-  // File paths as seen from cwd, with forward slashes.
   const relativeFiles = files.map((file) =>
     normalize(relative(cwd, resolve(rootPath, file))).replaceAll("\\", "/"),
   );
@@ -92,7 +88,6 @@ export function createCommandGroups({
     group.tasks = lines.map((line) => ({
       title: line,
       pattern,
-      // A command runs in a shell and gets the files, as many per call as fit in one command line.
       run: async (signal) => {
         for (const chunk of chunkFiles(matched, line.length, maxArgLength)) {
           await run("sh", ["-c", `${line} "$@"`, "sh", ...chunk], { cwd: rootPath, env, signal });
@@ -105,8 +100,6 @@ export function createCommandGroups({
   return groups;
 }
 
-/**
-/** Run a group's commands in order and skip the rest after a failure. Returns the failures. */
 async function runCommands(group, signal) {
   const failures = [];
   let failed = false;

@@ -3,7 +3,6 @@ import { parseArgs as parseNodeArgs } from "node:util";
 /** The command names, in the order the help lists them. */
 export const COMMANDS = ["install", "uninstall", "staged", "run"];
 
-/** The command that runs when no command is given. */
 const DEFAULT_COMMAND = "install";
 
 /** The options of `staged`: the name, the key in the settings, and the value it sets. */

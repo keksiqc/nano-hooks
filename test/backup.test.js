@@ -14,7 +14,6 @@ const patchPaths = (r) => ({
   unstaged: join(r.dir, ".git", "nano-hooks_partial.patch"),
 });
 
-/** Run `execute` inside the workflow for the staged files of `r`. */
 async function work(r, execute, options = {}) {
   const git = createGit(r.dir);
   const files = await git.stagedFiles();
@@ -30,7 +29,6 @@ async function work(r, execute, options = {}) {
   return { promise, steps };
 }
 
-/** The errors that the workflow rejected with. */
 async function errorsOf(promise) {
   try {
     await promise;
@@ -40,7 +38,6 @@ async function errorsOf(promise) {
   throw new Error("expected the workflow to reject");
 }
 
-/** Stage `a.js` with one hunk and leave a second, unstaged hunk in the worktree. */
 function partiallyStage(r) {
   r.write("a.js", "uno\ntwo\nthree\n");
   r.git("add", "a.js");
@@ -111,7 +108,6 @@ describe("runWithBackup", () => {
     partiallyStage(r);
 
     const { promise } = await work(r, async () => {
-      // A held index lock makes every later git command that writes the index fail.
       writeFileSync(join(r.dir, ".git", "index.lock"), "");
       throw new Error("task failed");
     });
@@ -147,7 +143,6 @@ describe("runWithBackup", () => {
     partiallyStage(r);
 
     const { promise } = await work(r, async () => {
-      // A directory cannot be removed like a patch file.
       rmSync(patchPaths(r).unstaged);
       mkdirSync(join(patchPaths(r).unstaged, "x"), { recursive: true });
       throw new Error("task failed");

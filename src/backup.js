@@ -50,15 +50,12 @@ export async function runWithBackup({
   }
 
   const errors = [];
-  /** Run one step, show it to the observer and record its error. Returns true if it worked. */
   const step = async (title, run, tasks) => {
     const node = { title, state: "run" };
     if (tasks) node.tasks = tasks;
     try {
       onStep(node);
-    } catch {
-      // The observer cannot change what the workflow does.
-    }
+    } catch {}
     try {
       await run(node);
       node.state = "done";
@@ -86,8 +83,6 @@ export async function runWithBackup({
     }
   };
 
-  // The backup is the safety net: without it nothing else runs. Nothing has changed yet,
-  // so the patches of a failed backup are of no use.
   if (!(await step("Preparing nano-hooks", () => git.diff(original)))) {
     try {
       removePatches();
@@ -97,7 +92,6 @@ export async function runWithBackup({
     throw new AggregateError(errors, "Staged tasks failed");
   }
 
-  // Each step runs only if the steps before it worked. A failure restores the original state.
   let ok = true;
   if (modified.length) {
     ok = await step("Backing up unstaged changes for staged files", async () => {

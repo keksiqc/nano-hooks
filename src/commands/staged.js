@@ -1,4 +1,3 @@
-// The staged-file runner is based on nano-staged (MIT), see LICENSE.
 import { realpathSync } from "node:fs";
 import { styleText } from "node:util";
 
@@ -7,8 +6,6 @@ import { createGit } from "../git.js";
 import { createRenderer, log } from "../log.js";
 import { CommandError, createCommandGroups, runCommandGroups } from "../tasks.js";
 
-/**
-/** Run the commands on the staged files with the working tree protected. False if none matched. */
 async function runTasks({
   allowEmpty,
   gitPaths,
@@ -52,8 +49,6 @@ async function runTasks({
   return true;
 }
 
-/**
-/** Git reports canonical paths, so cwd has to be canonical too. */
 function canonical(path) {
   try {
     return realpathSync.native(path);
@@ -62,14 +57,12 @@ function canonical(path) {
   }
 }
 
-/** Tell how to allow an empty commit, which only this command knows. */
 function advise(error) {
   return error instanceof EmptyCommitError
     ? new Error(`${error.message} Use --allow-empty to allow it.`, { cause: error })
     : error;
 }
 
-/** The failed commands with their output, styled for a terminal. */
 function formatFailures(failures) {
   return failures
     .map(
@@ -79,7 +72,6 @@ function formatFailures(failures) {
     .join("\n\n");
 }
 
-/** Command output is already formatted; anything else is a plain error line. */
 function report(error, stream) {
   if (error instanceof CommandError) stream.write(`\n${formatFailures(error.failures)}\n`);
   else log.error(error?.message ?? String(error), stream);
@@ -146,12 +138,10 @@ export async function runStaged({
  */
 export async function runConfiguredStaged({ loaded, flags = {}, cwd }) {
   const { allowEmpty, bail, parallel, restage } = { ...loaded.options, ...flags };
-  // Let rollback finish if the user interrupts a running commit.
   process.on("SIGINT", () => {});
   try {
     await runStaged({ config: loaded.staged, cwd, allowEmpty, bail, parallel, restage });
   } catch {
-    // runStaged has already reported the errors.
     return 1;
   }
   return 0;

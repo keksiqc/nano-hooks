@@ -13,7 +13,6 @@ describe("chunkFiles", () => {
   });
 
   it("starts a new chunk when the next file does not fit", () => {
-    // 10 used + (4 + 1) per file: two files make 20, a third would make 25.
     expect(chunkFiles(["aaaa", "bbbb", "cccc", "dddd", "eeee"], 10, 24)).toEqual([
       ["aaaa", "bbbb"],
       ["cccc", "dddd"],
@@ -34,10 +33,8 @@ describe("chunkFiles", () => {
   });
 });
 
-/** The file counts of the calls that `count.js` recorded. */
 const calls = (dir) => readFileSync(join(dir, "calls.log"), "utf8").trim().split("\n").map(Number);
 
-/** A command that appends the number of files it received to `calls.log`. */
 function setup() {
   const t = testTempDir();
   writeFileSync(
@@ -56,7 +53,6 @@ describe("createCommandGroups", () => {
       files,
       cwd: dir,
       rootPath: dir,
-      // Enough for the command and two of the absolute file paths, not for three.
       maxArgLength: "node count.js".length + 2 * (dir.length + 6) + 8,
     });
 
@@ -99,7 +95,6 @@ describe("createCommandGroups", () => {
   });
 });
 
-/** Two groups whose single task takes a moment; `log` records when each starts and ends. */
 function groups(log) {
   return ["a", "b"].map((name) => {
     const group = { title: name, fileCount: 1 };
@@ -150,7 +145,6 @@ describe("runCommandGroups", () => {
   });
 });
 
-/** A command task that takes a moment and then works or fails. */
 function command(pattern, title, { fail = false } = {}) {
   return {
     title,
@@ -169,7 +163,6 @@ const group = (title, fileCount, tasks) => ({
   tasks,
 });
 
-/** Three groups: a failing command list, a working list and a group without files. */
 function scenario() {
   return [
     group("*.js", 2, [
@@ -182,7 +175,6 @@ function scenario() {
   ];
 }
 
-/** The titles and states of a task tree, as plain data. */
 const outcomes = (tasks) =>
   tasks.map((task) => {
     const node = { title: task.title, state: task.state };
@@ -190,7 +182,6 @@ const outcomes = (tasks) =>
     return node;
   });
 
-/** Run the scenario with the given output and return what happened to the tasks. */
 async function execution(output, options) {
   const tree = scenario();
   const stream = { isTTY: output === "terminal", columns: 80, write: () => true };

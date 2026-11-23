@@ -14,7 +14,6 @@ const HIDE_CURSOR = "\x1b[?25l";
 const SHOW_CURSOR = "\x1b[?25h";
 const FRAME_INTERVAL = 130;
 
-/** One status line, written to stderr so stdout stays clean. */
 const line =
   (icon, color) =>
   (message, stream = process.stderr) =>
@@ -27,25 +26,21 @@ export const log = {
   error: line(symbols.fail, "red"),
 };
 
-/** How many terminal rows `text` takes up at the given width, ignoring colour codes. */
 const countRows = (text, width) =>
   stripVTControlCharacters(text)
     .split("\n")
     .reduce((rows, row) => rows + Math.max(1, Math.ceil(row.length / width)), 0);
 
-/** A task title as shown: a detail is dimmed, and the title of a failed task is red. */
 function title(task) {
   const text = task.state === "fail" ? styleText("red", task.title) : task.title;
   return task.detail ? `${text}${styleText("dim", ` - ${task.detail}`)}` : text;
 }
 
-/** The symbol of a task: its state, or the spinner frame while it runs. */
 function symbol(task, frame) {
   if (task.state === "run") return styleText("yellow", SPINNER[frame % SPINNER.length]);
   return symbols[task.state] ?? symbols.pending;
 }
 
-/** The whole task tree for a terminal. A finished group is folded into one line. */
 function tree(tasks, frame, level = 0) {
   return tasks
     .flatMap((task) => {
@@ -70,7 +65,6 @@ export function createRenderer(stream, { isTTY = true, quiet = false } = {}) {
   let rows = 0;
   let timer;
 
-  /** Without a terminal: one line for each finished leaf task, printed once. */
   function leaves(list, parents = []) {
     let output = "";
     for (const task of list) {
@@ -99,7 +93,6 @@ export function createRenderer(stream, { isTTY = true, quiet = false } = {}) {
       clearScreenDown(stream);
     }
     stream.write(last ? `${output}\n${SHOW_CURSOR}` : output);
-    // Some terminals (script, bare ptys) report 0 columns, which would make rows infinite.
     rows = countRows(output, stream.columns || 80);
   }
 

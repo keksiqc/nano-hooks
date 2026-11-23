@@ -1,4 +1,3 @@
-// Shared helpers for the benchmarks. Adapted from nano-staged (MIT), see LICENSE.
 import { execFile } from "node:child_process";
 import { lstat, mkdtemp, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -37,7 +36,6 @@ export async function packLocal(destination) {
     ["pack", "--json", "--ignore-scripts", "--pack-destination", destination],
     { cwd: root },
   );
-  // Older npm prints a list, newer npm prints an object keyed by package name.
   const result = JSON.parse(output);
   const [{ filename }] = Array.isArray(result) ? result : Object.values(result);
   return join(destination, filename);

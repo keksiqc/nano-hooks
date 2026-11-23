@@ -9,11 +9,9 @@ import { uninstall } from "../src/commands/uninstall.js";
 import { install } from "../src/hooks.js";
 import { FAIL, FMT, linkCli, testRepo, testTempDir } from "./helpers.js";
 
-/** Repo whose nano-hooks config has the given hooks, plus any extra keys. */
 const repo = (hooks = {}, options, extra = {}) =>
   testRepo({ ".nano-hooks.json": JSON.stringify({ ...hooks, ...extra }) }, options);
 
-/** Replace the configuration of a repo made by `repo`. */
 const configure = (r, config) => r.write(".nano-hooks.json", JSON.stringify(config));
 
 const hookPath = (r, name) => join(r.dir, ".git", "hooks", name);
@@ -36,7 +34,6 @@ describe("install", () => {
     expect(script).toContain("echo hello");
   });
 
-  // Windows has no executable bit; git for Windows runs the script through sh anyway.
   it.skipIf(process.platform === "win32")("makes managed scripts executable", async () => {
     const r = repo({ "pre-commit": "echo hello" });
 
@@ -291,7 +288,6 @@ describe("install", () => {
   });
 
   it("works when the project path contains spaces and a quote", async () => {
-    // Double quotes are not allowed in Windows paths.
     const dirName = process.platform === "win32" ? "my proj it's" : `my "proj" it's`;
     const r = repo({ "pre-commit": "touch ran" }, { dirName });
     await install({ cwd: r.dir });
@@ -365,7 +361,6 @@ describe("hooks that call staged", () => {
     expect(r.git("show", "HEAD:a.js")).toBe("uno\n");
   });
 
-  // An installed hook and an immediate run do the same.
   const runners = {
     "an installed hook": async (r, config) => {
       await install({ cwd: r.dir, config });
@@ -375,13 +370,11 @@ describe("hooks that call staged", () => {
       expect(await runHook("pre-commit", { cwd: r.dir, config })).toBe(0);
     },
   };
-  // Double quotes are not allowed in Windows paths.
   const dirName = process.platform === "win32" ? "my proj it's" : `my "proj" it's`;
   const configFile = "it's config.json";
   const call = `nano-hooks staged --config "${configFile}"`;
   const staged = { "*.js": "node fmt.js" };
 
-  /** A repo with `a.js` staged and a config file with an awkward name and path. */
   function stagedRepo(config) {
     const r = testRepo(
       { "fmt.js": FMT, "a.js": "one\n", [configFile]: JSON.stringify(config) },

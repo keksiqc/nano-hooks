@@ -6,7 +6,6 @@ const HIDE_CURSOR = "\x1b[?25l";
 const SHOW_CURSOR = "\x1b[?25h";
 const FRAME = 130;
 
-/** A stream that collects what is written to it. */
 function memoryStream(options = {}) {
   const chunks = [];
   return {
@@ -23,7 +22,6 @@ function memoryStream(options = {}) {
   };
 }
 
-/** An execution tree that holds a finished, a failed, a skipped and a running leaf. */
 function tree() {
   return {
     title: "Running tasks",
@@ -67,7 +65,6 @@ describe("createRenderer", () => {
       isTTY: true,
       columns: 0,
       write() {
-        // A runaway clear loop would otherwise hang the test run.
         if (++writes > 1000) throw new Error("runaway clear loop");
       },
     };

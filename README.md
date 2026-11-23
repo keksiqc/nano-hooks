@@ -23,14 +23,12 @@ nano-hooks requires Node 22, or Node 24 and later.
    {
      "scripts": { "prepare": "nano-hooks" },
      "nano-hooks": {
-       "pre-commit": {
-         "staged": {
-           "*.{js,ts}": "eslint --fix",
-           "*.css": ["prettier --write"]
-         },
-         "run": "npm run typecheck"
-       },
-       "commit-msg": "node scripts/check-msg.js $1"
+       "pre-commit": ["nano-hooks staged", "npm run typecheck"],
+       "commit-msg": "node scripts/check-msg.js $1",
+       "staged": {
+         "*.{js,ts}": "eslint --fix",
+         "*.css": ["prettier --write"]
+       }
      }
    }
    ```
@@ -41,36 +39,33 @@ nano-hooks requires Node 22, or Node 24 and later.
 
 nano-hooks reads its configuration from one of these places, in this order: the `nano-hooks` key in `package.json`, the file `nano-hooks.config.json`, and the file `.nano-hooks.json`. All of them hold plain JSON. nano-hooks never runs your code to read the configuration. It looks only in the directory where you run it, unless you set `--config`. If more than one of these places exists, nano-hooks stops with an error that names them. Keep one.
 
-The keys of the configuration are the names of Git hooks, and the key `options`. Each hook is one of three things:
+The keys of the configuration are the names of Git hooks, the key `staged`, and the key `options`. Each hook is one of two things:
 
 - A command, such as `"commit-msg": "commitlint --edit \"$1\""`.
 - A list of commands, such as `"pre-push": ["npm run lint", "npm test"]`. The commands run one after the other, and the first command that fails stops the list.
-- An object with the keys `run` and `staged`, and the settings in the table below. At least one of `run` and `staged` is required.
+
+A hook is never an object, and nano-hooks adds no step to a hook. To run the `staged` step in a hook, write the command `nano-hooks staged` in it.
 
 ```json
 {
   "nano-hooks": {
     "options": { "bail": true, "preserveUnused": ["post-merge"] },
-    "pre-commit": {
-      "staged": {
-        "*.{js,ts,tsx}": ["oxlint --fix", "prettier --write"],
-        "*.json": "prettier --write"
-      },
-      "run": ["npm run typecheck", "npm test"],
-      "restage": true,
-      "parallel": false
-    },
+    "pre-commit": ["nano-hooks staged", "npm run typecheck", "npm test"],
     "commit-msg": "commitlint --edit \"$1\"",
-    "pre-push": ["npm run lint", "npm test"]
+    "pre-push": ["npm run lint", "npm test"],
+    "staged": {
+      "*.{js,ts,tsx}": ["oxlint --fix", "prettier --write"],
+      "*.json": "prettier --write"
+    }
   }
 }
 ```
 
-The `pre-commit` hook is the only hook that accepts `staged` and the settings. `staged` maps a glob pattern to a command or to a list of commands. This is the nano-staged format. Patterns support `*`, `**`, `?`, `[abc]`, `[!a-z]` and `{a,b}`. A pattern without a slash matches the file name at any depth. Groups like `!(a)` and `+(a|b)` are not supported; use braces instead. When the hook runs, the `staged` step runs first and the `run` commands run second. If the `staged` step fails, the `run` commands do not run.
+The `staged` key maps a glob pattern to a command or to a list of commands. This is the nano-staged format. Patterns support `*`, `**`, `?`, `[abc]`, `[!a-z]` and `{a,b}`. A pattern without a slash matches the file name at any depth. Groups like `!(a)` and `+(a|b)` are not supported. Use braces instead. The command `nano-hooks staged` runs these commands on the staged files. If one of them fails, the commit stops, and the commands after `nano-hooks staged` in the hook do not run.
 
-These settings control the `staged` step. Set them in the `pre-commit` object for one hook, or in `options` for the whole configuration. The value in the hook wins over the value in `options`, and a command line option wins over both.
+These keys of `options` control the `staged` step. A command line option of `nano-hooks staged` wins over `options`.
 
-| Setting      | Default | Description                                                                                           |
+| Key          | Default | Description                                                                                           |
 | ------------ | ------- | ----------------------------------------------------------------------------------------------------- |
 | `parallel`   | `true`  | Run the `staged` patterns side by side. If two patterns can match the same file, set it to `false`.   |
 | `bail`       | `false` | Stop the `staged` step after the first command that fails. Same as `--bail`.                          |
@@ -79,7 +74,31 @@ These settings control the `staged` step. Set them in the `pre-commit` object fo
 
 The `options` section accepts one more key. `preserveUnused` is `true`, or a list of hook names. It keeps hooks that nano-hooks wrote earlier but that are no longer in the configuration.
 
-If the configuration has a mistake, nano-hooks rejects it and lists every problem with the file name and the key. For example: `pre-comit: unknown key (expected a git hook name or options)`.
+If the configuration has a mistake, nano-hooks rejects it and lists every problem with the file name and the key. For example: `pre-comit: unknown key (expected a git hook name, staged or options)`.
+
+Git starts every hook in the root of the repository, and nano-hooks runs your commands there. `nano-hooks staged` reads the configuration from the directory where it runs. If the configuration is in a subdirectory, write the `cd` in the hook, for example `"pre-commit": "cd packages/app && nano-hooks staged"`. If the configuration file has another name, write `nano-hooks staged --config <path>` in the hook.
+
+### Upgrading from 0.6
+
+In 0.6, the `staged` step and its values sat inside the `pre-commit` object. That shape is now an error. This is a 0.6 configuration:
+
+```json
+{
+  "pre-commit": { "staged": { "*.js": "eslint --fix" }, "run": "npm test", "bail": true }
+}
+```
+
+This is the same configuration now:
+
+```json
+{
+  "options": { "bail": true },
+  "pre-commit": ["nano-hooks staged", "npm test"],
+  "staged": { "*.js": "eslint --fix" }
+}
+```
+
+An old file gives this error: `pre-commit: an object is not allowed. Use a command or a list of commands. Move "staged" to the top level, and move allowEmpty, bail, parallel and restage to "options".` Also, `install` no longer adds `cd` or `--config` to a call of `nano-hooks staged`. After you change the configuration, run `nano-hooks install` again.
 
 ### Commands in hooks and in `staged`
 
@@ -97,12 +116,12 @@ In a hook, every command runs in a `sh` shell, gets the hook arguments as `$1`, 
 
 ## CLI
 
-| Command                              | Description                                          |
-| ------------------------------------ | ---------------------------------------------------- |
-| `nano-hooks` or `nano-hooks install` | Write the configured hooks.                          |
-| `nano-hooks uninstall`               | Remove the hooks that nano-hooks manages.            |
-| `nano-hooks staged`                  | Run the `staged` step of the `pre-commit` hook only. |
-| `nano-hooks run <hook>`              | Run one configured hook now, with all its steps.     |
+| Command                              | Description                                      |
+| ------------------------------------ | ------------------------------------------------ |
+| `nano-hooks` or `nano-hooks install` | Write the configured hooks.                      |
+| `nano-hooks uninstall`               | Remove the hooks that nano-hooks manages.        |
+| `nano-hooks staged`                  | Run the commands of the `staged` key.            |
+| `nano-hooks run <hook>`              | Run one configured hook now, with all its steps. |
 
 | Option                | Applies to    | Description                                                    |
 | --------------------- | ------------- | -------------------------------------------------------------- |
@@ -118,17 +137,17 @@ The `--config` option accepts a `.json` file or a `package.json` file. For a `pa
 
 The `uninstall` command does not read the configuration. It accepts `--config` but ignores it.
 
-The hook script holds your `run` commands as you wrote them. If the hook has a `staged` key, the script first calls `nano-hooks staged`. If you run `nano-hooks install --config <path>`, that call becomes `nano-hooks staged --config <path>`. The script changes only when you run `install`, so run it again after you change a `run` command. The `staged` step reads the configuration each time it runs, so a change to `staged` or to a setting takes effect at once. The hook scripts contain no absolute paths, so they keep working when you move the repository. They find `nano-hooks` in `node_modules/.bin` of the project.
+The hook script holds your commands as you wrote them. The `install` command adds no `cd`, no flag and no variable. The script changes only when you run `install`, so run it again after you change a hook. The `staged` step reads the configuration each time it runs, so a change to `staged` or to `options` takes effect at once. The hook scripts contain no absolute paths, so they keep working when you move the repository. They find `nano-hooks` in `node_modules/.bin` of the project.
 
-The `run` command runs all steps of the named hook now. For a `pre-commit` object, it runs the `staged` step and then the `run` commands. The `run` commands go to a `sh` shell. For example, `nano-hooks run pre-push` runs the `pre-push` command from your configuration. The exit code of the failing step or command becomes the exit code of `run`. The `run` command does not need the hook to be installed, and it ignores `SKIP_NANO_HOOKS`.
+The `run` command runs the commands of the named hook now. For example, `nano-hooks run pre-push` runs the `pre-push` command from your configuration. If the hook calls `nano-hooks staged`, the `staged` step runs as it does in a real commit. The commands go to a `sh` shell in the directory where you run the command. The exit code of the failing command becomes the exit code of `run`. The `run` command does not need the hook to be installed, and it ignores `SKIP_NANO_HOOKS`.
 
-The `staged` command runs only the `staged` step of the `pre-commit` hook, and not the `run` commands. Use it if you write your own Git hook, for example with another hook manager, or to test your patterns by hand.
+The `staged` command runs the commands of the `staged` key. A hook calls it. You can also run it by hand to test your patterns.
 
 ## Staged files
 
 The `staged` command comes from [nano-staged](https://github.com/usmanyunusov/nano-staged) by Usman Yunusov. nano-hooks is not affiliated with nano-staged. See [Credits](#credits).
 
-To move from nano-staged, copy your nano-staged configuration into the `staged` key of the `pre-commit` hook. nano-hooks reads only JSON, so a nano-staged function task must become a command. nano-hooks does not read `.nano-staged.*` files or the `nano-staged` key. It runs only on staged files, so it does not include the `--diff` and `--unstaged` modes of nano-staged.
+To move from nano-staged, copy your nano-staged configuration into the top-level `staged` key, and add `nano-hooks staged` to your `pre-commit` hook. nano-hooks reads only JSON, so a nano-staged function task must become a command. nano-hooks does not read `.nano-staged.*` files or the `nano-staged` key. It runs only on staged files, so it does not include the `--diff` and `--unstaged` modes of nano-staged.
 
 If the file list is too long for one command line, nano-hooks runs the command several times, each time on a part of the files.
 
@@ -173,7 +192,7 @@ pnpm fmt
 pnpm test
 ```
 
-The `pnpm install` command runs `prepare`, which installs the pre-commit hook of this repository. The hook runs `nano-hooks staged`, which formats staged files with `pnpm run fmt` and lints staged JavaScript files with `pnpm run lint`. Then it runs `pnpm run test`. The `pre-push` hook also runs `pnpm run test`.
+The `pnpm install` command runs `prepare`, which installs the pre-commit hook of this repository. The `pre-commit` hook runs `nano-hooks staged`, which formats staged files with `pnpm run fmt` and lints staged JavaScript files with `pnpm run lint`.
 
 CI uses the Unit Test workflow from [`sxzz/workflows`](https://github.com/sxzz/workflows). The file is `.github/workflows/ci.yml`. It runs on each push and pull request to `main`. It runs `pnpm run lint` once on Linux. It runs `pnpm run test` on Ubuntu and Windows with Node 22, 24, and 26. CI does not check formatting, so run `pnpm fmt` before you push.
 

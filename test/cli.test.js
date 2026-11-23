@@ -14,7 +14,6 @@ const fmtMap = { "*.js": "node fmt.js" };
 const hooks = (map) => JSON.stringify(map);
 const stagedConfig = JSON.stringify({ staged: fmtMap });
 
-// Both patterns match a.js. The first command is slow, so it ends last when they overlap.
 const order = (options, ...args) => {
   const r = repo({
     "a.js": "one\n",
@@ -30,8 +29,6 @@ const order = (options, ...args) => {
   return r.read("order");
 };
 
-// The first pattern fails. The second one runs only if the failure did not stop the rest.
-/** Whether the second pattern ran after the first one failed, for the given staged options. */
 const secondPatternRuns = (...args) => {
   const r = repo({
     "a.js": "one\n",
@@ -247,7 +244,6 @@ describe("nano-hooks run with a hook that calls staged", () => {
   });
 });
 
-/** A script that appends `name` to the file `order`. */
 const appendScript = (name) => `require("node:fs").appendFileSync("order", "${name}");\n`;
 
 describe("lists of commands", () => {

@@ -1,5 +1,3 @@
-// Adapted from nano-staged (MIT), see LICENSE.
-// Time one run of each runner on 10 staged files. Usage: node bench/running-time/index.js [rounds]
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { styleText } from "node:util";
@@ -58,8 +56,6 @@ try {
   await createProject(cwd, tarballDir);
 
   const times = Object.fromEntries(RUNNERS.map((runner) => [runner.name, []]));
-  // Warm up once so the first runner does not pay for a cold disk cache, then interleave the
-  // rounds so that slow moments on the machine hit every runner alike.
   for (const runner of RUNNERS) await time(cwd, runner);
   for (let round = 0; round < ROUNDS; round++) {
     for (const runner of RUNNERS) times[runner.name].push(await time(cwd, runner));

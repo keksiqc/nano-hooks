@@ -2,7 +2,6 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    include: ["test/**/*.test.js"],
-    testTimeout: 30_000,
+    include: ["test/**/*.test.js", "src/**/test/**/*.test.js"],
   },
 });

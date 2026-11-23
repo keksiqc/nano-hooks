@@ -1,16 +1,9 @@
-// A tiny glob matcher in the style of picomatch, without dependencies.
-// Supported: `*`, `?`, `**`, `[abc]`, `[!a-z]`, `{a,b}` (also nested) and `\` escapes.
-// Not supported: extglob groups like `!(a)` or `+(a|b)`. They throw, because a group that
-// repeats can make a RegExp backtrack without limit. Dotfiles match like any other file.
-
-/** Escape a character that is special in a RegExp. */
 const escapeChar = (char) => char.replace(/[\\^$.*+?()[\]{}|/-]/g, "\\$&");
 
-/** The index of the `]` that closes the bracket expression at `start`, or -1. */
 function bracketEnd(str, start) {
   let pos = start + 1;
   if (str[pos] === "!" || str[pos] === "^") pos++;
-  if (str[pos] === "]") pos++; // a first `]` is a literal
+  if (str[pos] === "]") pos++;
   for (; pos < str.length; pos++) {
     if (str[pos] === "\\") pos++;
     else if (str[pos] === "]") return pos;
@@ -18,14 +11,12 @@ function bracketEnd(str, start) {
   return -1;
 }
 
-/** Skip an escape or a bracket expression at `pos`: the index of its last character. */
 function skipLiteral(str, pos) {
   if (str[pos] === "\\") return pos + 1;
   const end = bracketEnd(str, pos);
   return end === -1 ? pos : end;
 }
 
-/** The index of the `}` that closes the `{` at `start` and the comma separated parts, or null. */
 function parseBrace(str, start) {
   const parts = [];
   let depth = 0;
@@ -47,7 +38,6 @@ function parseBrace(str, start) {
   return null;
 }
 
-/** Expand `{a,b}` into every pattern it stands for. A brace without a comma stays as it is. */
 function expandBraces(str, from = 0) {
   for (let pos = from; pos < str.length; pos++) {
     const char = str[pos];
@@ -68,7 +58,6 @@ function expandBraces(str, from = 0) {
   return [str];
 }
 
-/** The RegExp source of a bracket expression, given what is between `[` and `]`. */
 function bracket(body) {
   const negate = body[0] === "!" || body[0] === "^";
   const chars = negate ? body.slice(1) : body;
@@ -85,7 +74,6 @@ function bracket(body) {
   return `[${negate ? "^/" : ""}${set}]`;
 }
 
-/** The RegExp source of one pattern without braces. */
 function compile(pattern) {
   let out = "";
   for (let pos = 0; pos < pattern.length; pos++) {
@@ -99,7 +87,7 @@ function compile(pattern) {
       );
     } else if (char === "/") {
       if (pattern.startsWith("/**", pos) && pos + 3 === pattern.length) {
-        out += "(?:/.*)?"; // `a/**` also matches `a`
+        out += "(?:/.*)?";
         pos += 2;
       } else {
         out += "/";
@@ -112,8 +100,8 @@ function compile(pattern) {
         out += ".*";
         pos = end - 1;
       } else if (end - pos > 1 && segmentStart && pattern[end] === "/") {
-        out += "(?:[^/]*/)*"; // zero or more directories
-        pos = end; // swallow the slash after `**`
+        out += "(?:[^/]*/)*";
+        pos = end;
       } else {
         out += "[^/]*";
         pos = end - 1;

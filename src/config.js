@@ -30,7 +30,6 @@ export const SETTINGS = ["allowEmpty", "bail", "parallel", "restage"];
 
 const OPTIONS = [...SETTINGS, "preserveUnused"];
 
-/** The JSON files to search for, after the `nano-hooks` key of `package.json`. */
 const FILES = ["nano-hooks.config.json", ".nano-hooks.json"];
 
 export const isObject = (value) =>
@@ -52,7 +51,6 @@ function read(path) {
   }
 }
 
-/** Read an explicitly named config file; a package.json holds it under the nano-hooks key. */
 function readFile(cwd, file) {
   const path = resolve(cwd, file);
   if (!existsSync(path)) throw new Error(`Configuration file ${file} not found.`);
@@ -90,7 +88,6 @@ export function findConfig(cwd) {
 
 const NO_COMMAND = "must be a command or a non-empty list of commands";
 
-/** The problems in the `staged` key of a hook, as lines naming the key. */
 function validateStaged(staged, path) {
   if (!isObject(staged)) return [`${path}: must be an object of glob pattern to command(s)`];
   if (Object.keys(staged).length === 0) return [`${path}: must have at least one pattern`];
@@ -106,7 +103,6 @@ function validateStaged(staged, path) {
   return problems;
 }
 
-/** The problems in one hook, as lines naming the key. */
 function validateHook(name, value) {
   if (isCommandList(value)) return [];
   if (isObject(value)) {
@@ -117,7 +113,6 @@ function validateHook(name, value) {
   return [`${name}: must be a command or a list of commands`];
 }
 
-/** Collect every problem in the config, as lines naming the offending key. */
 function validate(raw) {
   if (!isObject(raw)) return ["configuration must be an object"];
 

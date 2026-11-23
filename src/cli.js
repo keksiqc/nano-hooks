@@ -11,9 +11,7 @@ import { HELP } from "./help.js";
 import { hasForeignFiles, install } from "./hooks.js";
 import { log } from "./log.js";
 
-/** Write the hooks and report what happened. Returns the exit code. */
 async function installHooks(config) {
-  // Lets CI and container builds run `prepare` without installing hooks.
   if (process.env.NANO_HOOKS === "0") {
     log.info("Skipped install because NANO_HOOKS=0.");
     return 0;
@@ -24,7 +22,6 @@ async function installHooks(config) {
     result = await install({ config });
   } catch (error) {
     if (!(error instanceof NotGitRepositoryError)) throw error;
-    // A `prepare` script must not fail an install where there is no .git directory.
     log.warn(`${error.message}. Hooks were not installed.`);
     return 0;
   }
@@ -45,12 +42,9 @@ async function installHooks(config) {
   return 0;
 }
 
-/** What each command does. Each returns the exit code, and an error it throws exits with 1. */
 const handlers = {
   install: ({ options }) => installHooks(options.config),
 
-  // Uninstall removes whatever nano-hooks wrote, so it reads no config. The --config option
-  // is still accepted, so one set of options works for every command.
   async uninstall() {
     const { removed } = await uninstall();
     for (const name of removed) log.success(`Removed ${name}`);
@@ -63,14 +57,12 @@ const handlers = {
     return runConfiguredStaged({ loaded, flags: options });
   },
 
-  // The hook command prints its own output and decides the exit code.
   run({ options, args: [hook] }) {
     if (!hook) throw new Error('Command "run" needs a hook name.');
     return runHook(hook, { config: options.config });
   },
 };
 
-/** Returns the process exit code. */
 async function main(argv) {
   try {
     const { action, command, name, options, args } = parseArgs(argv);

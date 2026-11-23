@@ -4,8 +4,8 @@ import { PassThrough } from "node:stream";
 
 import { describe, expect, it } from "vitest";
 
-import { runStaged } from "../src/commands/staged.js";
-import { FAIL, FMT, MARK, RESET, testRepo, testTempDir } from "./helpers.js";
+import { FAIL, FMT, MARK, RESET, testRepo, testTempDir } from "../../../test/helpers.js";
+import { runStaged } from "../staged.js";
 
 const repo = (files, options) =>
   testRepo(
@@ -195,7 +195,6 @@ describe("runStaged conflicts and bad configs", () => {
 
     expect(message).toContain("A merge conflict occurred");
     expect(r.read("a.js")).toContain("uno-x");
-    // The conflict stays open and the patches that hold the changes are kept and reported.
     expect(r.git("ls-files", "--unmerged")).not.toBe("");
     for (const patch of ["nano-hooks.patch", "nano-hooks_partial.patch"]) {
       expect(existsSync(join(r.dir, ".git", patch))).toBe(true);
@@ -209,7 +208,6 @@ describe("runStaged conflicts and bad configs", () => {
     r.git("add", "a.js");
     r.write("a.js", "uno-x\ntwo\nthree\n");
     await failure(run(r, { config: FMT_JS }));
-    // Resolve the conflict, as the user would before committing again.
     r.write("a.js", "resolved\ntwo\nthree\n");
     r.git("add", "a.js");
     const patch = readFileSync(join(r.dir, ".git", "nano-hooks_partial.patch"), "utf8");
