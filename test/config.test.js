@@ -144,6 +144,39 @@ describe("loadConfig", () => {
   });
 });
 
+const top = (staged) => ({ ".nano-hooks.json": json({ staged }) });
+
+describe("top-level staged key", () => {
+  it("reads the top-level staged key next to the hooks", async () => {
+    const staged = { "*.js": "eslint", "*.css": ["a", "b"] };
+    const r = repo({
+      ".nano-hooks.json": json({ "pre-commit": "nano-hooks staged", staged }),
+    });
+
+    expect(await loadConfig(r.dir)).toEqual({
+      hooks: { "pre-commit": "nano-hooks staged" },
+      staged,
+      preserveUnused: false,
+      options: {},
+    });
+  });
+
+  it("reports problems in the top-level staged key", async () => {
+    const message = await problems(top({ "*.js": 5, "*.css": [], "!(a).js": "fmt" }));
+
+    expect(message).toContain('staged["*.js"]: must be a command or a non-empty list of commands');
+    expect(message).toContain('staged["*.css"]: must be a command or a non-empty list of commands');
+    expect(message).toContain('staged["!(a).js"]: "!(" groups are not supported');
+  });
+
+  it("rejects an empty top-level staged key and one that is not an object", async () => {
+    expect(await problems(top({}))).toContain("staged: must have at least one pattern");
+    expect(await problems(top("eslint"))).toContain(
+      "staged: must be an object of glob pattern to command(s)",
+    );
+  });
+});
+
 const pre = (value) => ({ ".nano-hooks.json": json({ "pre-commit": value }) });
 
 describe("hook objects", () => {
@@ -222,11 +255,13 @@ describe("hook objects", () => {
 describe("invalid configuration", () => {
   it("rejects the keys of version 0.4 and the server-side hooks as unknown", async () => {
     const message = await problems({
-      ".nano-hooks.json": json({ hooks: {}, staged: {}, preserveUnused: true, "pre-receive": "x" }),
+      ".nano-hooks.json": json({ hooks: {}, preserveUnused: true, "pre-receive": "x" }),
     });
 
-    for (const key of ["hooks", "staged", "preserveUnused", "pre-receive"]) {
-      expect(message).toContain(`${key}: unknown key (expected a git hook name or options)`);
+    for (const key of ["hooks", "preserveUnused", "pre-receive"]) {
+      expect(message).toContain(
+        `${key}: unknown key (expected a git hook name, staged or options)`,
+      );
     }
   });
 
@@ -235,7 +270,9 @@ describe("invalid configuration", () => {
       ".nano-hooks.json": json({ "pre-comit": "x", "commit-msg": "", foo: 1 }),
     });
 
-    expect(message).toContain("pre-comit: unknown key (expected a git hook name or options)");
+    expect(message).toContain(
+      "pre-comit: unknown key (expected a git hook name, staged or options)",
+    );
     expect(message).toContain("commit-msg: must be a command, a list of commands or an object");
     expect(message).toContain("foo: unknown key");
     expect(message).toContain(`Valid hooks: ${VALID_HOOKS.join(", ")}`);

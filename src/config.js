@@ -159,10 +159,12 @@ function validate(raw) {
 
   for (const [key, value] of Object.entries(raw)) {
     if (key === "options") continue;
-    if (VALID_HOOKS.includes(key)) {
+    if (key === "staged") {
+      problems.push(...validateStaged(value, "staged"));
+    } else if (VALID_HOOKS.includes(key)) {
       problems.push(...validateHook(key, value));
     } else {
-      problems.push(`${key}: unknown key (expected a git hook name or options)`);
+      problems.push(`${key}: unknown key (expected a git hook name, staged or options)`);
       unknownHook = true;
     }
   }
@@ -212,7 +214,7 @@ export async function loadConfig(cwd = process.cwd(), { file } = {}) {
     throw new Error([`Invalid nano-hooks configuration in ${found.file}:`, ...lines].join("\n"));
   }
 
-  const { options = {}, ...hooks } = found.raw;
+  const { options = {}, staged, ...hooks } = found.raw;
   const { preserveUnused = false, ...flags } = options;
-  return { hooks, preserveUnused, options: flags };
+  return { hooks, staged, preserveUnused, options: flags };
 }
