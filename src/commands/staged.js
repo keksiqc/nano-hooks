@@ -3,7 +3,6 @@ import { realpathSync } from "node:fs";
 import { styleText } from "node:util";
 
 import { EmptyCommitError, runWithBackup } from "../backup.js";
-import { STAGED_HOOK, hookParts } from "../config.js";
 import { createGit } from "../git.js";
 import { createRenderer, log } from "../log.js";
 import { CommandError, createCommandGroups, runCommandGroups } from "../tasks.js";
@@ -106,7 +105,7 @@ export async function runStaged({
   try {
     if (!config) {
       throw new Error(
-        'No staged tasks configured. Add "staged" to the "pre-commit" hook in your nano-hooks configuration.',
+        'No staged tasks configured. Add a "staged" key to your nano-hooks configuration.',
       );
     }
 
@@ -142,16 +141,15 @@ export async function runStaged({
 
 /**
 /**
- * Run the `staged` step of the `pre-commit` hook. A setting comes from `flags`, then the
- * hook, then `options`. Returns the exit code.
+ * Run the commands of the top-level `staged` key. A setting comes from `flags`, then
+ * `options`. Returns the exit code.
  */
 export async function runConfiguredStaged({ loaded, flags = {}, cwd }) {
-  const hook = hookParts(loaded.hooks[STAGED_HOOK]);
-  const { allowEmpty, bail, parallel, restage } = { ...loaded.options, ...hook, ...flags };
+  const { allowEmpty, bail, parallel, restage } = { ...loaded.options, ...flags };
   // Let rollback finish if the user interrupts a running commit.
   process.on("SIGINT", () => {});
   try {
-    await runStaged({ config: hook.staged, cwd, allowEmpty, bail, parallel, restage });
+    await runStaged({ config: loaded.staged, cwd, allowEmpty, bail, parallel, restage });
   } catch {
     // runStaged has already reported the errors.
     return 1;

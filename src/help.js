@@ -4,7 +4,7 @@ export const HELP = `Usage: nano-hooks [command] [options]
 Commands:
   install (default)  Write the configured git hooks
   uninstall          Remove the hooks nano-hooks manages
-  staged             Run the staged step of the pre-commit hook
+  staged             Run the commands of the "staged" key
   run <hook>         Run one configured git hook now
 
 Options:
@@ -18,6 +18,6 @@ Options for staged:
   --no-parallel  Run the patterns one after the other
   --no-restage   Leave the changes of the commands out of the commit
 
-  These options can also be set in the "pre-commit" hook or in the "options" section of
-  the configuration. A command line option wins over the configuration.
+  These options can also be set in the "options" section of the configuration.
+  A command line option wins over the configuration.
 `;

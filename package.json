@@ -44,11 +44,10 @@
   },
   "packageManager": "pnpm@12.21.0",
   "nano-hooks": {
-    "pre-commit": {
-      "staged": {
-        "*": "pnpm run fmt",
-        "*.{js,jsx,ts,tsx,mjs,cjs}": "pnpm run lint"
-      }
+    "pre-commit": "nano-hooks staged",
+    "staged": {
+      "*": "pnpm run fmt",
+      "*.{js,jsx,ts,tsx,mjs,cjs}": "pnpm run lint"
     }
   }
 }

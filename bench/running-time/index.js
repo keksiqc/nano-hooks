@@ -26,7 +26,7 @@ async function createProject(cwd, tarballDir) {
         private: true,
         "lint-staged": TASKS,
         "nano-staged": TASKS,
-        "nano-hooks": { "pre-commit": { staged: TASKS } },
+        "nano-hooks": { staged: TASKS },
       },
       null,
       2,

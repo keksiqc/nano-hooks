@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
-import { hasStaged, hookParts, loadConfig } from "./config.js";
+import { loadConfig } from "./config.js";
 import { createGit } from "./git.js";
 
 export const MARKER = "# nano-hooks: managed file, do not edit";
@@ -46,22 +46,6 @@ export function managedHooks(hooksDir) {
   return readdirSync(hooksDir, { withFileTypes: true })
     .filter((entry) => entry.isFile() && isManaged(join(hooksDir, entry.name)))
     .map((entry) => entry.name);
-}
-
-/**
-/**
- * The shell code of an installed hook: a call of `nano-hooks staged` if the hook has the
- * `staged` step, then the `run` commands. `cd` prefixes the call for hooks that start in
- * another directory, and `config` is a config file that is not discovered. The call runs in a
- * subshell, so `cd` does not change where the `run` commands start.
- */
-function hookCommand(name, value, config, cd) {
-  const flag = config ? ` --config ${quote(config)}` : "";
-  // The `nano-hooks` command comes from `node_modules/.bin`, which the script puts on PATH.
-  const call = `${cd}nano-hooks staged${flag}`;
-  const steps = hasStaged(name, value) ? [cd ? `(${call})` : call] : [];
-  const { run = [] } = hookParts(value);
-  return commandScript([...steps, ...[run].flat()]);
 }
 
 /**
@@ -109,7 +93,6 @@ export async function install({ cwd = process.cwd(), config } = {}) {
   const { preserveUnused } = loaded;
   const rel = await relativeRoot(projectRoot);
   const { hooks } = loaded;
-  const cd = rel ? `cd ${quote(rel)} && ` : "";
   const binDir = join(rel, "node_modules", ".bin").replaceAll("\\", "/");
 
   mkdirSync(hooksDir, { recursive: true });
@@ -121,7 +104,7 @@ export async function install({ cwd = process.cwd(), config } = {}) {
       skipped.push(name);
       continue;
     }
-    writeFileSync(path, hookScript(binDir, hookCommand(name, value, config, cd)), {
+    writeFileSync(path, hookScript(binDir, commandScript(value)), {
       mode: 0o755,
     });
     chmodSync(path, 0o755);
