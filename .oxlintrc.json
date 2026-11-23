@@ -12,8 +12,21 @@
     "nursery": "off"
   },
   "rules": {
-    "eslint/no-await-in-loop": "off"
+    "eslint/no-await-in-loop": "off",
+    "unicorn/no-hex-escape": "off",
+    "jsdoc/require-param": "off",
+    "jsdoc/require-returns": "off"
   },
+  "overrides": [
+    {
+      "files": ["test/**"],
+      "rules": {
+        "landmines/no-cold-start-in-test": "off",
+        "eslint/max-lines-per-function": "off",
+        "eslint/max-lines": "off"
+      }
+    }
+  ],
   "env": {
     "builtin": true,
     "node": true
