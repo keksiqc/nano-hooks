@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { VALID_HOOKS, hookParts, loadConfig } from "../src/config.js";
+import { VALID_HOOKS, loadConfig } from "../src/config.js";
 import { testRepo as repo } from "./helpers.js";
 
 const json = (value) => JSON.stringify(value);
@@ -65,7 +65,7 @@ describe("loadConfig", () => {
   it("keeps each hook as written", async () => {
     const r = repo({
       ".nano-hooks.json": json({
-        "pre-commit": { staged: { "*.js": "eslint", "*.css": ["a", "b"] }, run: "tsc" },
+        "pre-commit": ["nano-hooks staged", "tsc"],
         "commit-msg": "x",
         "pre-push": ["a", "b"],
       }),
@@ -73,7 +73,7 @@ describe("loadConfig", () => {
 
     expect(await loadConfig(r.dir)).toEqual({
       hooks: {
-        "pre-commit": { staged: { "*.js": "eslint", "*.css": ["a", "b"] }, run: "tsc" },
+        "pre-commit": ["nano-hooks staged", "tsc"],
         "commit-msg": "x",
         "pre-push": ["a", "b"],
       },
@@ -140,7 +140,7 @@ describe("loadConfig", () => {
   it.each([[[]], [["ok", ""]], [["ok", 5]], [""], [5]])("rejects the hook value %j", async (v) => {
     const message = await problems({ ".nano-hooks.json": json({ "pre-push": v }) });
 
-    expect(message).toContain("pre-push: must be a command, a list of commands or an object");
+    expect(message).toContain("pre-push: must be a command or a list of commands");
   });
 });
 
@@ -180,76 +180,19 @@ describe("top-level staged key", () => {
 const pre = (value) => ({ ".nano-hooks.json": json({ "pre-commit": value }) });
 
 describe("hook objects", () => {
-  it("accepts run, staged and the settings of staged", async () => {
-    const value = {
-      run: ["npm run typecheck", "npm test"],
-      staged: { "*.js": "oxlint --fix" },
-      restage: true,
-      parallel: false,
-      bail: true,
-      allowEmpty: false,
-    };
-    const r = repo(pre(value));
+  it.each([[{ run: "x" }], [{ staged: { "*": "y" } }], [{ run: "x", bail: true }], [{}]])(
+    "rejects the hook object %j and shows the new shape",
+    async (value) => {
+      const message = await problems(pre(value));
 
-    expect((await loadConfig(r.dir)).hooks["pre-commit"]).toEqual(value);
-  });
-
-  it("accepts an object with only run, or only staged", async () => {
-    await expect(loadConfig(repo(pre({ run: "x" })).dir)).resolves.toBeDefined();
-    await expect(loadConfig(repo(pre({ staged: { "*": "x" } })).dir)).resolves.toBeDefined();
-  });
-
-  it("reports problems with the path of the key", async () => {
-    const message = await problems(
-      pre({
-        run: [],
-        staged: { "*.js": 5, "*.css": [] },
-        parallel: "no",
-        nope: 1,
-      }),
-    );
-
-    expect(message).toContain("pre-commit.run: must be a command or a non-empty list of commands");
-    expect(message).toContain(
-      'pre-commit.staged["*.js"]: must be a command or a non-empty list of commands',
-    );
-    expect(message).toContain(
-      'pre-commit.staged["*.css"]: must be a command or a non-empty list of commands',
-    );
-    expect(message).toContain("pre-commit.parallel: must be true or false");
-    expect(message).toContain("pre-commit.nope: unknown key (expected run, staged, ");
-  });
-
-  it("rejects a staged glob that uses an extglob group", async () => {
-    const message = await problems(pre({ staged: { "!(a).js": "fmt", "*.js": "lint" } }));
-
-    expect(message).toContain('pre-commit.staged["!(a).js"]: "!(" groups are not supported');
-    expect(message).not.toContain('staged["*.js"]');
-  });
-
-  it("rejects an empty staged key and one that is not an object", async () => {
-    expect(await problems(pre({ staged: {} }))).toContain(
-      "pre-commit.staged: must have at least one pattern",
-    );
-    expect(await problems(pre({ staged: "eslint" }))).toContain(
-      "pre-commit.staged: must be an object of glob pattern to command(s)",
-    );
-  });
-
-  it("rejects an object that has nothing to run", async () => {
-    expect(await problems(pre({ bail: true }))).toContain('pre-commit: needs "run" or "staged"');
-  });
-
-  it("rejects the staged key and its settings on other hooks", async () => {
-    const message = await problems({
-      ".nano-hooks.json": json({
-        "pre-push": { run: "x", staged: { "*": "y" }, bail: true },
-      }),
-    });
-
-    expect(message).toContain('pre-push.staged: only the "pre-commit" hook accepts this key');
-    expect(message).toContain('pre-push.bail: only the "pre-commit" hook accepts this key');
-  });
+      expect(message).toContain(
+        "pre-commit: an object is not allowed. Use a command or a list of commands.",
+      );
+      expect(message).toContain(
+        'Move "staged" to the top level, and move allowEmpty, bail, parallel and restage to "options".',
+      );
+    },
+  );
 });
 
 describe("invalid configuration", () => {
@@ -273,7 +216,7 @@ describe("invalid configuration", () => {
     expect(message).toContain(
       "pre-comit: unknown key (expected a git hook name, staged or options)",
     );
-    expect(message).toContain("commit-msg: must be a command, a list of commands or an object");
+    expect(message).toContain("commit-msg: must be a command or a list of commands");
     expect(message).toContain("foo: unknown key");
     expect(message).toContain(`Valid hooks: ${VALID_HOOKS.join(", ")}`);
   });
@@ -339,14 +282,5 @@ describe("loadConfig with an explicit file", () => {
     await expect(loadConfig(r.dir, { file: "custom.json" })).rejects.toThrow(
       "Invalid nano-hooks configuration in custom.json:",
     );
-  });
-});
-
-describe("hookParts", () => {
-  it("treats a command or a list as the run of an object", () => {
-    expect(hookParts("a")).toEqual({ run: "a" });
-    expect(hookParts(["a", "b"])).toEqual({ run: ["a", "b"] });
-    expect(hookParts({ run: "a", bail: true })).toEqual({ run: "a", bail: true });
-    expect(hookParts(undefined)).toEqual({});
   });
 });

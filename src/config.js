@@ -25,9 +25,6 @@ export const VALID_HOOKS = [
   "post-index-change",
 ];
 
-/** The hook that has the `staged` step. */
-export const STAGED_HOOK = "pre-commit";
-
 /** The true or false settings of the `staged` step. Each one is a flag of `nano-hooks staged`. */
 export const SETTINGS = ["allowEmpty", "bail", "parallel", "restage"];
 
@@ -42,17 +39,6 @@ const isCommand = (value) => typeof value === "string" && value.trim() !== "";
 /** A command, or a non-empty list of commands. */
 export const isCommandList = (value) =>
   isCommand(value) || (Array.isArray(value) && value.length > 0 && value.every(isCommand));
-
-/**
-/** The parts of a hook value. A command or a list of commands is the same as `{ run }`. */
-export function hookParts(value) {
-  if (value === undefined) return {};
-  return isObject(value) ? value : { run: value };
-}
-
-/** Whether a hook has the `staged` step, which only the `pre-commit` hook can have. */
-export const hasStaged = (name, value) =>
-  name === STAGED_HOOK && hookParts(value).staged !== undefined;
 
 /** The error for a file that cannot be read or parsed. */
 export const readFailure = (path, error) =>
@@ -123,31 +109,12 @@ function validateStaged(staged, path) {
 /** The problems in one hook, as lines naming the key. */
 function validateHook(name, value) {
   if (isCommandList(value)) return [];
-  if (!isObject(value)) return [`${name}: must be a command, a list of commands or an object`];
-
-  const staged = name === STAGED_HOOK;
-  const allowed = staged ? ["run", "staged", ...SETTINGS] : ["run"];
-  const problems = [];
-
-  for (const [key, entry] of Object.entries(value)) {
-    const path = `${name}.${key}`;
-    if (key === "run") {
-      if (!isCommandList(entry)) problems.push(`${path}: ${NO_COMMAND}`);
-    } else if (staged && key === "staged") {
-      problems.push(...validateStaged(entry, path));
-    } else if (staged && SETTINGS.includes(key)) {
-      if (typeof entry !== "boolean") problems.push(`${path}: must be true or false`);
-    } else if (key === "staged" || SETTINGS.includes(key)) {
-      problems.push(`${path}: only the "${STAGED_HOOK}" hook accepts this key`);
-    } else {
-      problems.push(`${path}: unknown key (expected ${allowed.join(", ")})`);
-    }
+  if (isObject(value)) {
+    return [
+      `${name}: an object is not allowed. Use a command or a list of commands. Move "staged" to the top level, and move allowEmpty, bail, parallel and restage to "options".`,
+    ];
   }
-
-  if (!("run" in value) && !(staged && "staged" in value)) {
-    problems.push(`${name}: needs ${staged ? '"run" or "staged"' : '"run"'}`);
-  }
-  return problems;
+  return [`${name}: must be a command or a list of commands`];
 }
 
 /** Collect every problem in the config, as lines naming the offending key. */
@@ -202,7 +169,8 @@ function validate(raw) {
 /**
  * Load the config from `cwd` (no upward search) or from `file`, relative to `cwd`. A missing
  * config is an empty one. An invalid config, or a named file that is missing, rejects.
- * `hooks` holds each hook as written: use `hookParts` to read one.
+ * `hooks` holds each hook as written, a command or a list of commands. `staged` is the
+ * top-level `staged` key, or undefined.
  */
 export async function loadConfig(cwd = process.cwd(), { file } = {}) {
   const found = file ? readFile(cwd, file) : findConfig(cwd);
