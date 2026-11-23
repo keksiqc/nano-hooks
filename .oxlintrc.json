@@ -1,11 +1,15 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "extends": ["./node_modules/@interfere/landmines/configs/recommended.json"],
-  "plugins": ["eslint", "unicorn", "oxc", "import", "jsdoc", "node", "vitest"],
+  "plugins": ["eslint", "unicorn", "oxc", "import", "jsdoc", "node", "promise", "vitest"],
   "categories": {
     "correctness": "error",
-    "suspicious": "warn",
-    "perf": "warn"
+    "suspicious": "error",
+    "perf": "error",
+    "style": "error",
+    "nursery": "off",
+    "restriction": "error",
+    "pedantic": "error"
   },
   "rules": {
     "eslint/no-await-in-loop": "off"
