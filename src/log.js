@@ -67,7 +67,6 @@ function leaves(list, printed, parents = []) {
 }
 
 /**
-/**
  * Draw a task list to `stream`: redrawn in place on a terminal, appended otherwise. A task is
  * `{ title, state, detail?, tasks? }`. The code that runs it sets `state` (`run`, `done`,
  * `fail` or `warn`, none while it waits). The renderer never writes it.

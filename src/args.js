@@ -21,7 +21,6 @@ const OPTIONS = {
 };
 
 /**
-/**
  * Options may appear before or after the command. The result has `action` ("help" or
  * "version") instead of `command` for those options, and `name` for an unknown command.
  * A bad option makes `util.parseArgs` throw.

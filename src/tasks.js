@@ -5,14 +5,11 @@ import { createMatcher } from "./glob.js";
 
 const MAX_ARG_LENGTH = ({ darwin: 262_144, win32: 8191 }[process.platform] ?? 131_072) / 2;
 
-/**
 // A task is `{ title, detail?, state?, tasks? }`. Only the runner below sets `state` (`run`,
 // `done`, `fail`, `warn` for skipped, unset while it waits). The renderer only reads it.
 
-/**
 // A failure is `{ pattern, title, message }`: the group pattern, the command and its output.
 
-/**
 /** Thrown when commands fail. `failures` lists them, and the message is plain text. */
 export class CommandError extends Error {
   name = "CommandError";
@@ -27,7 +24,6 @@ export class CommandError extends Error {
   }
 }
 
-/**
 /**
  * Split `files` into chunks so that each call stays below `maxLength` characters, counting
  * `usedLength` for the command. A chunk has at least one file.
@@ -51,7 +47,6 @@ export function chunkFiles(files, usedLength, maxLength = MAX_ARG_LENGTH) {
   return chunks;
 }
 
-/**
 /**
  * Build a task group per glob pattern in `config`, with a task per command. `files` are
  * relative to `rootPath`, the repository root where commands run, and only those below `cwd`
@@ -136,7 +131,6 @@ async function runCommands(group, signal) {
   return failures;
 }
 
-/**
 /**
  * Run the groups side by side, or one by one with `parallel: false` (do that when patterns can
  * match the same file and a command changes files). With `bail`, the first failure aborts the

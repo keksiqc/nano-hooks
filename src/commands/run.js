@@ -6,7 +6,6 @@ import { envWithBin } from "../exec.js";
 import { commandScript } from "../hooks.js";
 
 /**
-/**
  * Run one hook now, as git would: its commands in a `sh` shell. A failing command stops the
  * hook. Unlike an installed hook, it ignores `SKIP_NANO_HOOKS`. Returns the exit code.
  */

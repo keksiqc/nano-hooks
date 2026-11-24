@@ -120,14 +120,12 @@ function compile(pattern) {
   return out;
 }
 
-/**
 /** Convert a glob to an anchored RegExp. Throws for a group like `!(a)`. */
 export function globToRegex(glob) {
   const sources = expandBraces(glob).map((pattern) => compile(pattern));
   return new RegExp(`^(?:${sources.join("|")})$`, "u");
 }
 
-/**
 /**
  * Build a matcher for a glob and a path with forward slashes. A pattern without a slash
  * matches the file name at any depth.

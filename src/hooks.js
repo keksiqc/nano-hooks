@@ -22,7 +22,6 @@ export function isManaged(path) {
 }
 
 /**
-/**
  * The shell code for a command or a list of commands. The first failure stops the list. Each
  * command but the last is in braces, so a `;` or `||` inside it cannot change where it stops.
  */
@@ -73,7 +72,6 @@ function hookScript(binDir, script) {
   ].join("\n");
 }
 
-/**
 /**
  * Write the configured hook scripts and drop stale managed ones. `config` is a config file,
  * relative to `cwd`, to use instead of discovering one. `external` in the result is true when

@@ -68,7 +68,6 @@ function readFile(cwd, file) {
   return { file, raw };
 }
 
-/**
 /** Find the config in `cwd`. More than one place is an error. */
 export function findConfig(cwd) {
   const found = [];
@@ -209,7 +208,6 @@ function validate(raw) {
   return problems;
 }
 
-/**
 /**
  * Load the config from `cwd` (no upward search) or from `file`, relative to `cwd`. A missing
  * config is an empty one. An invalid config, or a named file that is missing, rejects.

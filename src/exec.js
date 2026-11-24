@@ -13,7 +13,6 @@ export function envWithBin(dir, env = process.env) {
 }
 
 /**
-/**
  * Run `command` and resolve with its combined stdout and stderr. A non-zero exit rejects with
  * the output as the message. `env` is added to the environment of this process.
  */

@@ -10,11 +10,9 @@ export class EmptyCommitError extends Error {
   name = "EmptyCommitError";
 }
 
-/**
 // A step is `{ title, state, tasks? }`. The workflow sets `state` (`run`, `done`, `fail`), and
 // the observer only reads it. `tasks` are the progress nodes of the task execution.
 
-/**
 /**
  * Snapshot the index and the unstaged changes before running tasks. A failed task restores
  * the original index and tracked changes.

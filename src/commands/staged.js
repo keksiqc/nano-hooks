@@ -78,7 +78,6 @@ function report(error, stream) {
 }
 
 /**
-/**
  * Run the commands of `config` (glob pattern to command or list of commands) on the staged
  * files below `cwd`. Failures go to `stream` and are rethrown, as an `AggregateError` when
  * several steps failed. The other options are the settings of `staged`, and `quiet` hides the
@@ -133,7 +132,6 @@ export async function runStaged({
   }
 }
 
-/**
 /**
  * Run the commands of the top-level `staged` key. A setting comes from `flags`, then
  * `options`. Returns the exit code.
