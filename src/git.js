@@ -1,7 +1,8 @@
-import { constants, copyFileSync, existsSync, realpathSync, renameSync, rmSync } from "node:fs";
-import { basename, dirname, isAbsolute, normalize, relative, resolve, sep } from "node:path";
+import { constants, copyFileSync, existsSync, renameSync, rmSync } from "node:fs";
+import { normalize, resolve } from "node:path";
 
 import { run } from "./exec.js";
+import { isInside, realPath } from "./paths.js";
 
 const APPLY_ARGS = ["-v", "--whitespace=nowarn", "--recount", "--unidiff-zero"];
 const DIFF_ARGS = [
@@ -36,20 +37,6 @@ function parseStatus(raw) {
   return entries.filter((entry) => !entry.path.endsWith("/"));
 }
 
-function realPath(path) {
-  try {
-    return realpathSync(path);
-  } catch {
-    const parent = dirname(path);
-    return parent === path ? path : resolve(realPath(parent), basename(path));
-  }
-}
-
-const isInside = (parent, child) => {
-  const path = relative(parent, child);
-  return path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path);
-};
-
 async function readHooksInfo(cwd, exec) {
   try {
     const out = await exec(["rev-parse", "--git-path", "hooks", "--git-common-dir"]);
@@ -71,9 +58,11 @@ async function readGitPaths(exec) {
   try {
     const out = await exec(["rev-parse", "--show-toplevel", "--absolute-git-dir"]);
     const [root, dot] = out.split(/\r?\n/u);
-    return root && dot ? { root: normalize(root), dot: normalize(dot) } : { root: null, dot: null };
+    return root && dot
+      ? { root: normalize(root), gitDir: normalize(dot) }
+      : { root: null, gitDir: null };
   } catch {
-    return { root: null, dot: null };
+    return { root: null, gitDir: null };
   }
 }
 
@@ -83,7 +72,7 @@ async function readIndexPath(cwd, exec) {
 }
 
 /** Replace the index through Git's lock file, leaving any other writer's lock alone. */
-export function restoreIndex(snapshot, index) {
+function restoreIndex(snapshot, index) {
   const lock = `${index}.lock`;
   copyFileSync(snapshot, lock, constants.COPYFILE_EXCL);
   try {
@@ -92,6 +81,26 @@ export function restoreIndex(snapshot, index) {
     rmSync(lock, { force: true });
     throw error;
   }
+}
+
+/**
+ * Copy the index to `path`, which must not exist, and make the copy independent of any shared
+ * index file that Git may expire. A failure leaves no file at `path` that this call made.
+ * The result puts the copy back over the index it came from.
+ */
+async function snapshotIndex(cwd, exec, path) {
+  const index = await readIndexPath(cwd, exec);
+  copyFileSync(index, path, constants.COPYFILE_EXCL);
+  try {
+    const env = { GIT_INDEX_FILE: path };
+    if ((await exec(["rev-parse", "--shared-index-path"], { env })).trim()) {
+      await exec(["update-index", "--no-split-index"], { env });
+    }
+  } catch (error) {
+    rmSync(path, { force: true });
+    throw error;
+  }
+  return { restore: () => restoreIndex(path, index) };
 }
 
 async function checkWouldChange(index, exec, paths) {
@@ -129,10 +138,9 @@ export function createGit(cwd = process.cwd()) {
   const hooksInfo = () => readHooksInfo(cwd, exec);
 
   return {
-    exec,
     hooksInfo,
     getGitPaths: () => readGitPaths(exec),
-    indexPath: () => readIndexPath(cwd, exec),
+    snapshotIndex: (path) => snapshotIndex(cwd, exec, path),
     async wouldChange(paths) {
       return checkWouldChange(await readIndexPath(cwd, exec), exec, paths);
     },

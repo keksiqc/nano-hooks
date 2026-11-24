@@ -17,7 +17,7 @@
   `src/args.js`. A test checks this.
 - The code of a command is one file in `src/commands/`. It exports plain functions and MUST
   NOT print to the terminal, except through the `log` helper of a runner. Code that several
-  commands share, such as `src/hooks.js` and `src/config.js`, stays outside
+  commands share, such as `src/hooks.js`, `src/git.js` and `src/config.js`, stays outside
   `src/commands/`. `src/index.js` is the public API and re-exports from these files.
 - The library entry `src/index.js` MUST NOT import `src/cli.js`, `src/args.js` or
   `src/help.js`. Code that only the CLI uses stays out of the library bundle that way.

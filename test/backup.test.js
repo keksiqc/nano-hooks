@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -21,7 +22,7 @@ async function work(r, execute, options = {}) {
   const steps = [];
   const promise = runWithBackup({
     rootPath: r.dir,
-    dotPath: join(r.dir, ".git"),
+    gitDir: join(r.dir, ".git"),
     files,
     execute: { tasks: [], run: execute },
     onStep: (step) => steps.push(step),
@@ -128,7 +129,7 @@ describe("runWithBackup", () => {
     expect(r.read("a.js")).toBe("uno\ntwo\ntres\n");
   });
 
-  it("restores the active alternate index", async () => {
+  it("restores the active alternate index", () => {
     const r = repo({
       "a.js": "one\ntwo\nthree\n",
       ".nano-hooks.json": JSON.stringify({
@@ -139,17 +140,18 @@ require("node:child_process").execFileSync("git", ["add", "a.js"]);
 process.exit(1);`,
     });
     const env = { GIT_INDEX_FILE: join(r.dir, ".git", "alternate-index") };
-    const git = (...args) => createGit(r.dir).exec(args, { env });
-    await git("read-tree", "HEAD");
+    const git = (...args) =>
+      execFileSync("git", args, { cwd: r.dir, env: { ...process.env, ...env }, encoding: "utf8" });
+    git("read-tree", "HEAD");
     r.write("a.js", "uno\ntwo\nthree\n");
-    await git("add", "a.js");
+    git("add", "a.js");
     r.write("a.js", "uno\ntwo\ntres\n");
 
     const result = nanoWith(r, { env }, "staged");
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("Restoring to original state because of errors");
-    expect(await git("show", ":a.js")).toBe("uno\ntwo\nthree\n");
+    expect(git("show", ":a.js")).toBe("uno\ntwo\nthree\n");
     expect(r.git("show", ":a.js")).toBe("one\ntwo\nthree\n");
     expect(r.read("a.js")).toBe("uno\ntwo\ntres\n");
   });
@@ -218,7 +220,7 @@ process.exit(1);`,
       () => {
         ran = true;
       },
-      { dotPath: join(r.dir, "missing") },
+      { gitDir: join(r.dir, "missing") },
     );
     await errorsOf(promise);
 

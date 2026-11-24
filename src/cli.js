@@ -2,13 +2,13 @@
 import { readFileSync } from "node:fs";
 
 import { parseArgs } from "./args.js";
+import { install } from "./commands/install.js";
 import { runHook } from "./commands/run.js";
 import { runConfiguredStaged } from "./commands/staged.js";
 import { uninstall } from "./commands/uninstall.js";
 import { loadConfig } from "./config.js";
 import { NotGitRepositoryError } from "./git.js";
 import { HELP } from "./help.js";
-import { hasForeignFiles, install } from "./hooks.js";
 import { log } from "./log.js";
 
 async function installHooks(config) {
@@ -25,8 +25,8 @@ async function installHooks(config) {
     log.warn(`${error.message}. Hooks were not installed.`);
     return 0;
   }
-  const { installed, removed, skipped, hooksDir, external } = result;
-  if (external && hasForeignFiles(hooksDir)) {
+  const { installed, removed, skipped, hooksDir, foreignHooksDir } = result;
+  if (foreignHooksDir) {
     log.warn(
       `core.hooksPath points outside .git: ${hooksDir}. Another hooks manager, such as husky, can use the same directory.`,
     );

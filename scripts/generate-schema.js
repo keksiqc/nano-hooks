@@ -1,15 +1,10 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
-import { NON_BLANK, SETTINGS, VALID_HOOKS } from "../src/config.js";
+import { NON_BLANK, VALID_HOOKS } from "../src/config.js";
+import { STAGED_SETTINGS } from "../src/settings.js";
 
 const command = { type: "string", pattern: NON_BLANK.source };
 const commandList = { $ref: "#/$defs/commandList" };
-const settingDescriptions = {
-  allowEmpty: "Allow a commit that becomes empty after running staged tasks.",
-  bail: "Stop running staged tasks after the first command fails.",
-  parallel: "Run tasks for different staged patterns concurrently.",
-  restage: "Stage the changes made by staged tasks.",
-};
 
 const schema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
@@ -24,9 +19,9 @@ const schema = {
       additionalProperties: false,
       properties: {
         ...Object.fromEntries(
-          SETTINGS.map((name) => [
+          Object.entries(STAGED_SETTINGS).map(([name, { description }]) => [
             name,
-            { type: "boolean", description: settingDescriptions[name] },
+            { type: "boolean", description },
           ]),
         ),
         preserveUnused: {

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { COMMANDS, STAGED_OPTIONS, parseArgs } from "../src/args.js";
-import { SETTINGS } from "../src/config.js";
+import { COMMANDS, parseArgs } from "../src/args.js";
 import { HELP } from "../src/help.js";
+import { STAGED_SETTINGS } from "../src/settings.js";
 
 const parse = (...argv) => parseArgs(argv);
 
@@ -61,19 +61,11 @@ describe("parseArgs", () => {
   });
 });
 
-describe("the command line and the configuration", () => {
-  it("has an option of staged for each setting of the configuration", () => {
-    const keys = Object.values(STAGED_OPTIONS).map(([key]) => key);
-
-    expect(keys.toSorted()).toEqual(SETTINGS.toSorted());
-  });
-});
-
 describe("the help text", () => {
   it("names every command and every option", () => {
     for (const command of COMMANDS) expect(HELP).toContain(`  ${command}`);
     for (const option of [
-      ...Object.keys(STAGED_OPTIONS).map((n) => `--${n}`),
+      ...Object.values(STAGED_SETTINGS).map(({ flag }) => flag),
       "--config",
       "--version",
       "--help",

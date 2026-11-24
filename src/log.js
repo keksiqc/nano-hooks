@@ -19,11 +19,22 @@ const line =
   (message, stream = process.stderr) =>
     stream.write(`${icon} ${color ? styleText(color, message) : message}\n`);
 
+/** The text for failed commands, `{ pattern, title, message }` each, as the terminal shows it. */
+function formatFailures(failures) {
+  return failures
+    .map(
+      ({ pattern, title: command, message }) =>
+        `${styleText("red", pattern)} ${styleText("dim", ">")} ${styleText("red", command)}:\n${message}`,
+    )
+    .join("\n\n");
+}
+
 export const log = {
   success: line(symbols.done),
   warn: line(symbols.warn),
   info: line(symbols.info),
   error: line(symbols.fail, "red"),
+  failures: (failures, stream = process.stderr) => stream.write(`\n${formatFailures(failures)}\n`),
 };
 
 const countRows = (text, width) =>

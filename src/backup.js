@@ -1,7 +1,7 @@
-import { constants, copyFileSync, existsSync, statSync, unlinkSync } from "node:fs";
+import { existsSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
-import { createGit, restoreIndex } from "./git.js";
+import { createGit } from "./git.js";
 
 const hasContent = (path) => existsSync(path) && statSync(path).size > 0;
 
@@ -17,7 +17,7 @@ export class EmptyCommitError extends Error {
  * Snapshot the index and the unstaged changes before running tasks. A failed task restores
  * the original index and tracked changes.
  *
- * The recovery files in `dotPath` stay, and the error lists them, when a rollback or a
+ * The recovery files in `gitDir` stay, and the error lists them, when a rollback or a
  * restoration did not finish. A later run refuses to start while they exist.
  *
  * `files` is the result of `stagedFiles`. With `restage: false`, the changes of the tasks stay
@@ -27,21 +27,21 @@ export class EmptyCommitError extends Error {
 export async function runWithBackup({
   allowEmpty = false,
   restage = true,
-  dotPath,
+  gitDir,
   rootPath,
   files,
   execute,
   onStep = () => {},
 }) {
-  const original = join(dotPath, "nano-hooks.patch");
-  const unstaged = join(dotPath, "nano-hooks_partial.patch");
-  const snapshot = join(dotPath, "nano-hooks.index");
+  const original = join(gitDir, "nano-hooks.patch");
+  const unstaged = join(gitDir, "nano-hooks_partial.patch");
+  const snapshot = join(gitDir, "nano-hooks.index");
   const backups = [original, unstaged, snapshot];
 
   assertNoLeftovers(backups);
 
   const errors = [];
-  const ctx = {
+  const workflow = {
     git: createGit(rootPath),
     step: createStepRunner(onStep, errors),
     original,
@@ -54,14 +54,14 @@ export async function runWithBackup({
     allowEmpty,
   };
 
-  const index = await prepareBackups(ctx, backups, errors);
-  if (!index) throw new AggregateError(errors, "Staged tasks failed");
+  const indexSnapshot = await prepareBackups(workflow, backups, errors);
+  if (!indexSnapshot) throw new AggregateError(errors, "Staged tasks failed");
 
-  const ok = await runTasks(ctx);
-  const recovered = await recover(ok, ctx, index);
+  const ok = await runAndStage(workflow);
+  const recovered = await recover(ok, workflow, indexSnapshot);
 
   if (recovered) {
-    await ctx.step("Cleaning up recovery files", () => removeBackups(backups));
+    await workflow.step("Cleaning up recovery files", () => removeBackups(backups));
   } else {
     const kept = backups.filter((file) => existsSync(file));
     if (kept.length > 0) errors.push(keptBackupsError(kept));
@@ -71,21 +71,14 @@ export async function runWithBackup({
 }
 
 async function prepareBackups({ git, step, original, snapshot }, backups, errors) {
-  let index;
+  let indexSnapshot;
   const prepared = await step("Preparing nano-hooks", async () => {
-    const path = await git.indexPath();
     // The exclusive copy also prevents overlapping runs from writing the same patches.
-    copyFileSync(path, snapshot, constants.COPYFILE_EXCL);
-    index = path;
-    const env = { GIT_INDEX_FILE: snapshot };
-    if ((await git.exec(["rev-parse", "--shared-index-path"], { env })).trim()) {
-      // Make the backup independent of shared index files Git may expire.
-      await git.exec(["update-index", "--no-split-index"], { env });
-    }
+    indexSnapshot = await git.snapshotIndex(snapshot);
     await git.diff(original);
   });
-  if (prepared) return index;
-  if (index) {
+  if (prepared) return indexSnapshot;
+  if (indexSnapshot) {
     try {
       removeBackups(backups);
     } catch (error) {
@@ -144,7 +137,7 @@ function removeBackups(backups) {
 }
 
 /** Back up the unstaged changes, run the tasks and stage their changes. True when all passed. */
-async function runTasks({ git, step, unstaged, modified, files, execute, restage, allowEmpty }) {
+async function runAndStage({ git, step, unstaged, modified, files, execute, restage, allowEmpty }) {
   let ok = true;
   if (modified.length > 0) {
     ok = await step("Backing up unstaged changes for staged files", async () => {
@@ -180,10 +173,10 @@ async function restoreUnstaged(git, unstaged) {
 }
 
 /** Roll back after a failure, or restore the unstaged changes. True when that worked. */
-function recover(ok, { git, step, original, unstaged, modified, snapshot }, index) {
+function recover(ok, { git, step, original, unstaged, modified }, indexSnapshot) {
   if (!ok) {
     return step("Restoring to original state because of errors", async () => {
-      restoreIndex(snapshot, index);
+      indexSnapshot.restore();
       await git.checkout(["."]);
       if (hasContent(original)) await git.apply(original);
     });

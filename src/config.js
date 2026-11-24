@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, extname, join, resolve } from "node:path";
 
 import { globToRegex } from "./glob.js";
+import { SETTING_NAMES } from "./settings.js";
 
 /** Hook names from githooks(5). */
 export const VALID_HOOKS = [
@@ -25,12 +26,15 @@ export const VALID_HOOKS = [
   "post-index-change",
 ];
 
-/** The true or false settings of the `staged` step. Each one is a flag of `nano-hooks staged`. */
-export const SETTINGS = ["allowEmpty", "bail", "parallel", "restage"];
+/** The names of the hooks, as one line for an error message. */
+export const VALID_HOOKS_HINT = `Valid hooks: ${VALID_HOOKS.join(", ")}`;
 
-const OPTIONS = [...SETTINGS, "preserveUnused"];
+const OPTION_NAMES = [...SETTING_NAMES, "preserveUnused"];
 
 const FILES = ["nano-hooks.config.json", ".nano-hooks.json"];
+
+/** A hook or `staged` entry holds one command or a list of commands. This gives the list. */
+export const toCommandList = (command) => (Array.isArray(command) ? command : [command]);
 
 export const isObject = (value) =>
   value !== null && typeof value === "object" && !Array.isArray(value);
@@ -89,123 +93,124 @@ export function findConfig(cwd) {
   return found[0];
 }
 
-function validateCommands(value, path, problems) {
+/** What the validators collect: the problems, and whether one of them names an unknown hook. */
+const createReport = () => ({ problems: [], unknownHook: false });
+
+function reportUnknownHook(report, problem) {
+  report.problems.push(problem);
+  report.unknownHook = true;
+}
+
+function validateCommands(value, path, report) {
   if (Array.isArray(value) && value.length > 0) {
     for (const [index, command] of value.entries()) {
       if (!nonBlankString(command))
-        problems.push(`${path}[${index}]: must be a non-blank command string`);
+        report.problems.push(`${path}[${index}]: must be a non-blank command string`);
     }
   } else if (!nonBlankString(value)) {
-    problems.push(`${path}: must be a command or a non-empty list of commands`);
+    report.problems.push(`${path}: must be a command or a non-empty list of commands`);
   }
 }
 
-function validateStaged(staged, problems) {
+function validateStaged(staged, report) {
   if (!isObject(staged)) {
-    problems.push("staged: must be an object mapping glob patterns to commands");
+    report.problems.push("staged: must be an object mapping glob patterns to commands");
     return;
   }
-  if (Object.keys(staged).length === 0) problems.push("staged: must have at least one pattern");
+  if (Object.keys(staged).length === 0) {
+    report.problems.push("staged: must have at least one pattern");
+  }
   for (const [pattern, task] of Object.entries(staged)) {
     const path = `staged[${JSON.stringify(pattern)}]`;
-    validateCommands(task, path, problems);
+    validateCommands(task, path, report);
     if (pattern === "") {
-      problems.push(`${path}: glob pattern must not be empty`);
+      report.problems.push(`${path}: glob pattern must not be empty`);
       continue;
     }
     try {
       globToRegex(pattern);
     } catch (error) {
-      problems.push(`${path}: ${error.message}`);
+      report.problems.push(`${path}: ${error.message}`);
     }
   }
 }
 
-/** Check the `hooks` object. True when it names an unknown hook. */
-function validateHooks(hooks, problems) {
+function validateHooks(hooks, report) {
   if (!isObject(hooks)) {
-    problems.push("hooks: must be an object");
-    return false;
+    report.problems.push("hooks: must be an object");
+    return;
   }
-  let unknownHook = false;
   for (const [name, value] of Object.entries(hooks)) {
     const path = `hooks.${name}`;
     if (!VALID_HOOKS.includes(name)) {
-      problems.push(`${path}: unknown git hook ${JSON.stringify(name)}`);
-      unknownHook = true;
+      reportUnknownHook(report, `${path}: unknown git hook ${JSON.stringify(name)}`);
     } else if (isObject(value)) {
-      problems.push(
+      report.problems.push(
         `${path}: an object is not allowed. Use a command or a list of commands. Move "staged" to the top level, and move allowEmpty, bail, parallel and restage to "options".`,
       );
     } else {
-      validateCommands(value, path, problems);
+      validateCommands(value, path, report);
     }
   }
-  return unknownHook;
 }
 
-/** Check `options.preserveUnused`. True when it names an unknown hook. */
-function validatePreserveUnused(value, problems) {
-  if (typeof value === "boolean") return false;
+function validatePreserveUnused(value, report) {
+  if (typeof value === "boolean") return;
   if (!Array.isArray(value)) {
-    problems.push("options.preserveUnused: must be true, false or a list of hook names");
-    return false;
+    report.problems.push("options.preserveUnused: must be true, false or a list of hook names");
+    return;
   }
-  let unknownHook = false;
   for (const [i, hook] of value.entries()) {
     if (typeof hook !== "string") {
-      problems.push(`options.preserveUnused[${i}]: must be a git hook name string`);
+      report.problems.push(`options.preserveUnused[${i}]: must be a git hook name string`);
     } else if (!VALID_HOOKS.includes(hook)) {
-      problems.push(`options.preserveUnused[${i}]: unknown git hook ${JSON.stringify(hook)}`);
-      unknownHook = true;
+      reportUnknownHook(
+        report,
+        `options.preserveUnused[${i}]: unknown git hook ${JSON.stringify(hook)}`,
+      );
     }
   }
-  return unknownHook;
 }
 
-/** Check the `options` object. True when `preserveUnused` names an unknown hook. */
-function validateOptions(options, problems) {
+function validateOptions(options, report) {
   if (!isObject(options)) {
-    problems.push("options: must be an object");
-    return false;
+    report.problems.push("options: must be an object");
+    return;
   }
-  let unknownHook = false;
   for (const [name, value] of Object.entries(options)) {
-    if (!OPTIONS.includes(name)) {
-      problems.push(`options.${name}: unknown option (expected ${OPTIONS.join(", ")})`);
+    if (!OPTION_NAMES.includes(name)) {
+      report.problems.push(`options.${name}: unknown option (expected ${OPTION_NAMES.join(", ")})`);
     } else if (name === "preserveUnused") {
-      unknownHook = validatePreserveUnused(value, problems) || unknownHook;
+      validatePreserveUnused(value, report);
     } else if (typeof value !== "boolean") {
-      problems.push(`options.${name}: must be true or false`);
+      report.problems.push(`options.${name}: must be true or false`);
     }
   }
-  return unknownHook;
 }
 
+/** The problems of a raw configuration, as text. An empty list means it is valid. */
 function validate(raw) {
   if (!isObject(raw)) return ["configuration must be an object"];
 
-  const problems = [];
-  let unknownHook = false;
-
+  const report = createReport();
   for (const [key, value] of Object.entries(raw)) {
     if (key === "options") {
-      unknownHook = validateOptions(value, problems) || unknownHook;
+      validateOptions(value, report);
     } else if (key === "hooks") {
-      unknownHook = validateHooks(value, problems) || unknownHook;
+      validateHooks(value, report);
     } else if (key === "staged") {
-      validateStaged(value, problems);
+      validateStaged(value, report);
     } else if (key === "$schema") {
-      if (!nonBlankString(value)) problems.push("$schema: must be a non-blank string");
+      if (!nonBlankString(value)) report.problems.push("$schema: must be a non-blank string");
     } else if (VALID_HOOKS.includes(key)) {
-      problems.push(`${key}: move this hook to "hooks.${key}"`);
+      report.problems.push(`${key}: move this hook to "hooks.${key}"`);
     } else {
-      problems.push(`${key}: unknown key (expected options, hooks, staged or $schema)`);
+      report.problems.push(`${key}: unknown key (expected options, hooks, staged or $schema)`);
     }
   }
 
-  if (unknownHook) problems.push(`Valid hooks: ${VALID_HOOKS.join(", ")}`);
-  return problems;
+  if (report.unknownHook) report.problems.push(VALID_HOOKS_HINT);
+  return report.problems;
 }
 
 /**
@@ -214,13 +219,8 @@ function validate(raw) {
  * `hooks` holds each hook as written, a command or a list of commands. `staged` is the
  * top-level `staged` key, or undefined.
  */
-export function loadConfig(cwd = process.cwd(), { file } = {}) {
-  return new Promise((done) => {
-    done(loadConfigSync(cwd, file));
-  });
-}
-
-function loadConfigSync(cwd, file) {
+// eslint-disable-next-line require-await -- a problem in the file must reject, not throw
+export async function loadConfig(cwd = process.cwd(), { file } = {}) {
   const found = file ? readFile(cwd, file) : findConfig(cwd);
   if (!found) return { hooks: {}, preserveUnused: false, options: {} };
 

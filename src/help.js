@@ -1,4 +1,12 @@
-/** The help text. Keep it in step with the commands and options in `args.js`. */
+import { STAGED_SETTINGS } from "./settings.js";
+
+const stagedFlags = Object.values(STAGED_SETTINGS);
+const flagWidth = Math.max(...stagedFlags.map(({ flag }) => flag.length));
+const stagedLines = stagedFlags
+  .map(({ flag, flagHelp }) => `  ${flag.padEnd(flagWidth)}  ${flagHelp}`)
+  .join("\n");
+
+/** The help text. Keep the commands in step with `args.js`. The `staged` options come from `settings.js`. */
 export const HELP = `Usage: nano-hooks [command] [options]
 
 Commands:
@@ -13,10 +21,7 @@ Options:
   -h, --help           Show this help
 
 Options for staged:
-  --allow-empty  Allow empty commits
-  --bail         Stop after the first failing command
-  --no-parallel  Run the patterns one after the other
-  --no-restage   Leave the changes of the commands out of the commit
+${stagedLines}
 
   These options can also be set in the "options" section of the configuration.
   A command line option wins over the configuration.

@@ -1,23 +1,15 @@
-import { realpathSync } from "node:fs";
-import { styleText } from "node:util";
-
 import { EmptyCommitError, runWithBackup } from "../backup.js";
 import { createGit } from "../git.js";
 import { createRenderer, log } from "../log.js";
+import { realPath } from "../paths.js";
+import { resolveSettings } from "../settings.js";
 import { CommandError, createCommandGroups, runCommandGroups } from "../tasks.js";
 
-async function runTasks({
-  allowEmpty,
-  gitPaths,
-  config,
-  stream,
-  files,
-  cwd,
-  quiet,
-  bail,
-  parallel,
-  restage,
-}) {
+/**
+ * Run the commands of `config` on the matching staged `files`, inside a backup of the index and
+ * the unstaged changes. Returns false when no file matches a pattern.
+ */
+async function runStagedTasks({ config, files, gitPaths, cwd, stream, quiet, settings }) {
   const groups = await createCommandGroups({
     config,
     files: files.working,
@@ -32,14 +24,14 @@ async function runTasks({
   });
   try {
     await runWithBackup({
-      allowEmpty,
-      restage,
+      allowEmpty: settings.allowEmpty,
+      restage: settings.restage,
       rootPath: gitPaths.root,
-      dotPath: gitPaths.dot,
+      gitDir: gitPaths.gitDir,
       files,
       execute: {
         tasks: groups,
-        run: () => runCommandGroups(groups, { bail, parallel }),
+        run: () => runCommandGroups(groups, { bail: settings.bail, parallel: settings.parallel }),
       },
       onStep: (step) => renderer.start(step),
     });
@@ -49,49 +41,29 @@ async function runTasks({
   return true;
 }
 
-function canonical(path) {
-  try {
-    return realpathSync.native(path);
-  } catch {
-    return path;
-  }
-}
-
 function advise(error) {
   return error instanceof EmptyCommitError
     ? new Error(`${error.message} Use --allow-empty to allow it.`, { cause: error })
     : error;
 }
 
-function formatFailures(failures) {
-  return failures
-    .map(
-      ({ pattern, title, message }) =>
-        `${styleText("red", pattern)} ${styleText("dim", ">")} ${styleText("red", title)}:\n${message}`,
-    )
-    .join("\n\n");
-}
-
 function report(error, stream) {
-  if (error instanceof CommandError) stream.write(`\n${formatFailures(error.failures)}\n`);
+  if (error instanceof CommandError) log.failures(error.failures, stream);
   else log.error(error?.message ?? String(error), stream);
 }
 
 /**
  * Run the commands of `config` (glob pattern to command or list of commands) on the staged
  * files below `cwd`. Failures go to `stream` and are rethrown, as an `AggregateError` when
- * several steps failed. The other options are the settings of `staged`, and `quiet` hides the
- * progress.
+ * several steps failed. `allowEmpty`, `bail`, `parallel` and `restage` are the settings of
+ * `staged`, and `quiet` hides the progress.
  */
 export async function runStaged({
   config,
   cwd = process.cwd(),
-  allowEmpty = false,
-  bail = false,
-  parallel = true,
-  restage = true,
   quiet = false,
   stream = process.stderr,
+  ...settings
 } = {}) {
   try {
     if (!config) {
@@ -100,7 +72,7 @@ export async function runStaged({
       );
     }
 
-    cwd = canonical(cwd);
+    cwd = realPath(cwd);
     const gitPaths = await createGit(cwd).getGitPaths();
     if (!gitPaths.root) throw new Error("Not a git repository.");
 
@@ -110,17 +82,14 @@ export async function runStaged({
       return;
     }
 
-    const ran = await runTasks({
-      allowEmpty,
-      gitPaths,
+    const ran = await runStagedTasks({
       config,
-      stream,
       files,
+      gitPaths,
       cwd,
+      stream,
       quiet,
-      bail,
-      parallel,
-      restage,
+      settings: resolveSettings(settings),
     });
     if (!ran) log.info("No files match any configured task.", stream);
   } catch (error) {
@@ -137,10 +106,10 @@ export async function runStaged({
  * `options`. Returns the exit code.
  */
 export async function runConfiguredStaged({ loaded, flags = {}, cwd }) {
-  const { allowEmpty, bail, parallel, restage } = { ...loaded.options, ...flags };
+  const settings = resolveSettings(loaded.options, flags);
   process.on("SIGINT", () => {});
   try {
-    await runStaged({ config: loaded.staged, cwd, allowEmpty, bail, parallel, restage });
+    await runStaged({ config: loaded.staged, cwd, ...settings });
   } catch {
     return 1;
   }

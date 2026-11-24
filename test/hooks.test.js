@@ -4,9 +4,9 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { install } from "../src/commands/install.js";
 import { runHook } from "../src/commands/run.js";
 import { uninstall } from "../src/commands/uninstall.js";
-import { install } from "../src/hooks.js";
 import { FAIL, FMT, linkCli, testRepo, testTempDir } from "./helpers.js";
 
 // A double quote is not a valid character in a Windows path.
@@ -241,6 +241,16 @@ describe("install", () => {
     const result = await install({ cwd: r.dir });
 
     expect(result).toMatchObject({ external: true, hooksDir: join(r.dir, ".husky/_") });
+  });
+
+  it("reports foreign files only in a hooks dir outside .git", async () => {
+    const r = repo({ "pre-commit": "echo a" });
+    r.git("config", "core.hooksPath", ".husky/_");
+    expect(await install({ cwd: r.dir })).toMatchObject({ foreignHooksDir: false });
+
+    r.write(".husky/_/husky.sh", "# husky\n");
+
+    expect(await install({ cwd: r.dir })).toMatchObject({ foreignHooksDir: true });
   });
 
   it("does not report a hooks dir inside .git, or from a linked worktree", async () => {

@@ -1,7 +1,9 @@
 import { isAbsolute, normalize, relative, resolve } from "node:path";
 
+import { toCommandList } from "./config.js";
 import { envWithBin, run } from "./exec.js";
 import { createMatcher } from "./glob.js";
+import { toPosix } from "./paths.js";
 
 const MAX_ARG_LENGTH = ({ darwin: 262_144, win32: 8191 }[process.platform] ?? 131_072) / 2;
 
@@ -60,7 +62,7 @@ export function createCommandGroups({
   maxArgLength = MAX_ARG_LENGTH,
 }) {
   const relativeFiles = files.map((file) =>
-    normalize(relative(cwd, resolve(rootPath, file))).replaceAll("\\", "/"),
+    toPosix(normalize(relative(cwd, resolve(rootPath, file)))),
   );
   const env = envWithBin(cwd);
   const groups = [];
@@ -74,7 +76,7 @@ export function createCommandGroups({
       })
       .map((file) => resolve(cwd, file));
 
-    const lines = matched.length > 0 ? [].concat(commands) : [];
+    const lines = matched.length > 0 ? toCommandList(commands) : [];
     const suffix =
       matched.length > 0
         ? `${matched.length} ${matched.length > 1 ? "files" : "file"}`
