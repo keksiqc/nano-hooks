@@ -85,6 +85,8 @@ The `options` section accepts one more key. `preserveUnused` is `true`, or a lis
 
 If the configuration has a mistake, nano-hooks rejects it and lists every problem with the file name and key. A misspelled hook produces an error such as `hooks.pre-comit: unknown git hook "pre-comit"`.
 
+For editor completion and validation, add `"$schema": "./node_modules/nano-hooks/schema.json"` to a standalone configuration file in your project root. The schema also describes the value of the `nano-hooks` key in `package.json`. nano-hooks checks staged glob syntax when it loads the configuration. [JSON Schema](./schema.json)
+
 Git starts every hook in the root of the repository, and nano-hooks runs your commands there. `nano-hooks staged` reads the configuration from the directory where it runs. If the configuration is in a subdirectory, set `hooks.pre-commit` to a command such as `cd packages/app && nano-hooks staged`. If the configuration file has another name, write `nano-hooks staged --config <path>` in the hook.
 
 ### Upgrading from 0.6

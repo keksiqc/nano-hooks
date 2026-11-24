@@ -15,19 +15,22 @@
     "nano-hooks": "./src/cli.js"
   },
   "files": [
-    "src"
+    "src",
+    "schema.json"
   ],
   "type": "module",
   "sideEffects": false,
   "exports": {
     ".": "./src/index.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./schema.json": "./schema.json"
   },
   "scripts": {
     "fmt": "oxfmt",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix && oxfmt",
     "test": "vitest run",
+    "schema": "node scripts/generate-schema.js",
     "bench": "node bench/running-time/index.js && node bench/size/index.js",
     "release": "pnpm run lint:fix && pnpm run test && bumpp",
     "prepare": "nano-hooks"

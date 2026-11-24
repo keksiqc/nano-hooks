@@ -1,3 +1,6 @@
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import { VALID_HOOKS, loadConfig } from "../src/config.js";
@@ -67,6 +70,14 @@ describe("loadConfig", () => {
     expect(await loadConfig(r.dir)).toEqual({ hooks: {}, preserveUnused: false, options: {} });
   });
 
+  it("accepts a relative schema path without resolving it", async () => {
+    const r = repo({
+      ".nano-hooks.json": json({ $schema: "./missing-schema.json", hooks: {} }),
+    });
+
+    expect(await loadConfig(r.dir)).toEqual({ hooks: {}, preserveUnused: false, options: {} });
+  });
+
   it("keeps each hook as written", async () => {
     const r = repo({
       ".nano-hooks.json": json({
@@ -132,6 +143,17 @@ describe("loadConfig", () => {
     );
   });
 
+  it("reports invalid preserveUnused entries by index without coercing their values", async () => {
+    const message = await problems({
+      ".nano-hooks.json": json({
+        options: { preserveUnused: [{ toString: null }, "pre-comit"] },
+      }),
+    });
+
+    expect(message).toContain("options.preserveUnused[0]: must be a git hook name string");
+    expect(message).toContain('options.preserveUnused[1]: unknown git hook "pre-comit"');
+  });
+
   it("rejects an options section that is not an object", async () => {
     const message = await problems({ ".nano-hooks.json": json({ options: true }) });
 
@@ -146,10 +168,23 @@ describe("loadConfig", () => {
     expect((await loadConfig(r.dir)).hooks).toEqual({ "pre-push": ["pnpm lint", "pnpm test"] });
   });
 
-  it.each([[[]], [["ok", ""]], [["ok", 5]], [""], [5]])("rejects the hook value %j", async (v) => {
+  it.each([[[]], [""], [" \t"], [5]])("rejects the hook value %j", async (v) => {
     const message = await problems({ ".nano-hooks.json": json({ hooks: { "pre-push": v } }) });
 
-    expect(message).toContain("hooks.pre-push: must be a command or a list of commands");
+    expect(message).toContain("hooks.pre-push: must be a command or a non-empty list of commands");
+  });
+
+  it("reports each invalid command with its list index", async () => {
+    const message = await problems({
+      ".nano-hooks.json": json({
+        hooks: { "pre-push": ["ok", "", 5] },
+        staged: { "*.js": ["ok", " \n"] },
+      }),
+    });
+
+    expect(message).toContain("hooks.pre-push[1]: must be a non-blank command string");
+    expect(message).toContain("hooks.pre-push[2]: must be a non-blank command string");
+    expect(message).toContain('staged["*.js"][1]: must be a non-blank command string');
   });
 });
 
@@ -171,17 +206,18 @@ describe("top-level staged key", () => {
   });
 
   it("reports problems in the top-level staged key", async () => {
-    const message = await problems(top({ "*.js": 5, "*.css": [], "!(a).js": "fmt" }));
+    const message = await problems(top({ "*.js": 5, "*.css": [], "!(a).js": "fmt", "": "fmt" }));
 
     expect(message).toContain('staged["*.js"]: must be a command or a non-empty list of commands');
     expect(message).toContain('staged["*.css"]: must be a command or a non-empty list of commands');
     expect(message).toContain('staged["!(a).js"]: "!(" groups are not supported');
+    expect(message).toContain('staged[""]: glob pattern must not be empty');
   });
 
   it("rejects an empty top-level staged key and one that is not an object", async () => {
     expect(await problems(top({}))).toContain("staged: must have at least one pattern");
     expect(await problems(top("eslint"))).toContain(
-      "staged: must be an object of glob pattern to command(s)",
+      "staged: must be an object mapping glob patterns to commands",
     );
   });
 });
@@ -211,7 +247,9 @@ describe("invalid configuration", () => {
     });
 
     expect(message).toContain('hooks.pre-receive: unknown git hook "pre-receive"');
-    expect(message).toContain("preserveUnused: unknown key (expected options, hooks or staged)");
+    expect(message).toContain(
+      "preserveUnused: unknown key (expected options, hooks, staged or $schema)",
+    );
   });
 
   it.each([[null], [[]], ["echo hi"]])("rejects a hooks section of %j", async (hooks) => {
@@ -234,7 +272,9 @@ describe("invalid configuration", () => {
     });
 
     expect(message).toContain('hooks.pre-comit: unknown git hook "pre-comit"');
-    expect(message).toContain("hooks.commit-msg: must be a command or a list of commands");
+    expect(message).toContain(
+      "hooks.commit-msg: must be a command or a non-empty list of commands",
+    );
     expect(message).toContain("foo: unknown key");
     expect(message).toContain(`Valid hooks: ${VALID_HOOKS.join(", ")}`);
   });
@@ -245,10 +285,33 @@ describe("invalid configuration", () => {
     );
   });
 
+  it("rejects an invalid schema reference", async () => {
+    const message = await problems({ ".nano-hooks.json": json({ $schema: "  " }) });
+
+    expect(message).toContain("$schema: must be a non-blank string");
+  });
+
+  it("reports a valid JSON package.json with an invalid root", async () => {
+    const r = repo({ "package.json": "null" });
+
+    await expect(loadConfig(r.dir)).rejects.toThrow("package.json must contain an object");
+    await expect(loadConfig(r.dir, { file: "package.json" })).rejects.toThrow(
+      "package.json must contain an object",
+    );
+  });
+
   it("names the file when the config cannot be parsed", async () => {
     const message = await problems({ ".nano-hooks.json": "{ not json" });
 
     expect(message).toMatch(/^Failed to read .*\.nano-hooks\.json: /u);
+  });
+});
+
+describe("JSON Schema", () => {
+  it("matches the generated schema", () => {
+    const script = fileURLToPath(new URL("../scripts/generate-schema.js", import.meta.url));
+
+    expect(() => execFileSync(process.execPath, [script, "--check"])).not.toThrow();
   });
 });
 

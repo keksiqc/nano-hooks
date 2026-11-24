@@ -34,11 +34,8 @@ const FILES = ["nano-hooks.config.json", ".nano-hooks.json"];
 
 export const isObject = (value) =>
   value !== null && typeof value === "object" && !Array.isArray(value);
-const isCommand = (value) => typeof value === "string" && value.trim() !== "";
-/** A command, or a non-empty list of commands. */
-export const isCommandList = (value) =>
-  isCommand(value) ||
-  (Array.isArray(value) && value.length > 0 && value.every((command) => isCommand(command)));
+export const NON_BLANK = /\S/u;
+const nonBlankString = (value) => typeof value === "string" && NON_BLANK.test(value);
 
 /** The error for a file that cannot be read or parsed. */
 export const readFailure = (path, error) =>
@@ -52,6 +49,12 @@ function read(path) {
   }
 }
 
+function readPackageConfig(path) {
+  const pkg = read(path);
+  if (!isObject(pkg)) throw new Error(`${path}: package.json must contain an object.`);
+  return pkg["nano-hooks"];
+}
+
 function readFile(cwd, file) {
   const path = resolve(cwd, file);
   if (!existsSync(path)) throw new Error(`Configuration file ${file} not found.`);
@@ -60,7 +63,7 @@ function readFile(cwd, file) {
   }
   if (basename(path) !== "package.json") return { file, raw: read(path) };
 
-  const raw = read(path)["nano-hooks"];
+  const raw = readPackageConfig(path);
   if (raw === undefined) throw new Error(`${file} has no "nano-hooks" key.`);
   return { file, raw };
 }
@@ -71,7 +74,7 @@ export function findConfig(cwd) {
   const found = [];
   const pkg = join(cwd, "package.json");
   if (existsSync(pkg)) {
-    const raw = read(pkg)["nano-hooks"];
+    const raw = readPackageConfig(pkg);
     if (raw !== undefined) found.push({ file: "package.json", raw });
   }
   for (const file of FILES) {
@@ -87,31 +90,36 @@ export function findConfig(cwd) {
   return found[0];
 }
 
-const NO_COMMAND = "must be a command or a non-empty list of commands";
+function validateCommands(value, path, problems) {
+  if (Array.isArray(value) && value.length > 0) {
+    for (const [index, command] of value.entries()) {
+      if (!nonBlankString(command))
+        problems.push(`${path}[${index}]: must be a non-blank command string`);
+    }
+  } else if (!nonBlankString(value)) {
+    problems.push(`${path}: must be a command or a non-empty list of commands`);
+  }
+}
 
-function validateStaged(staged, path) {
-  if (!isObject(staged)) return [`${path}: must be an object of glob pattern to command(s)`];
-  if (Object.keys(staged).length === 0) return [`${path}: must have at least one pattern`];
-  const problems = [];
+function validateStaged(staged, problems) {
+  if (!isObject(staged)) {
+    problems.push("staged: must be an object mapping glob patterns to commands");
+    return;
+  }
+  if (Object.keys(staged).length === 0) problems.push("staged: must have at least one pattern");
   for (const [pattern, task] of Object.entries(staged)) {
-    if (!isCommandList(task)) problems.push(`${path}["${pattern}"]: ${NO_COMMAND}`);
+    const path = `staged[${JSON.stringify(pattern)}]`;
+    validateCommands(task, path, problems);
+    if (pattern === "") {
+      problems.push(`${path}: glob pattern must not be empty`);
+      continue;
+    }
     try {
       globToRegex(pattern);
     } catch (error) {
-      problems.push(`${path}["${pattern}"]: ${error.message}`);
+      problems.push(`${path}: ${error.message}`);
     }
   }
-  return problems;
-}
-
-function validateHook(path, value) {
-  if (isCommandList(value)) return [];
-  if (isObject(value)) {
-    return [
-      `${path}: an object is not allowed. Use a command or a list of commands. Move "staged" to the top level, and move allowEmpty, bail, parallel and restage to "options".`,
-    ];
-  }
-  return [`${path}: must be a command or a list of commands`];
 }
 
 /** Check the `hooks` object. True when it names an unknown hook. */
@@ -122,11 +130,16 @@ function validateHooks(hooks, problems) {
   }
   let unknownHook = false;
   for (const [name, value] of Object.entries(hooks)) {
-    if (VALID_HOOKS.includes(name)) {
-      problems.push(...validateHook(`hooks.${name}`, value));
-    } else {
-      problems.push(`hooks.${name}: unknown git hook "${name}"`);
+    const path = `hooks.${name}`;
+    if (!VALID_HOOKS.includes(name)) {
+      problems.push(`${path}: unknown git hook ${JSON.stringify(name)}`);
       unknownHook = true;
+    } else if (isObject(value)) {
+      problems.push(
+        `${path}: an object is not allowed. Use a command or a list of commands. Move "staged" to the top level, and move allowEmpty, bail, parallel and restage to "options".`,
+      );
+    } else {
+      validateCommands(value, path, problems);
     }
   }
   return unknownHook;
@@ -141,9 +154,12 @@ function validatePreserveUnused(value, problems) {
   }
   let unknownHook = false;
   for (const [i, hook] of value.entries()) {
-    if (VALID_HOOKS.includes(hook)) continue;
-    problems.push(`options.preserveUnused[${i}]: unknown git hook "${hook}"`);
-    unknownHook = true;
+    if (typeof hook !== "string") {
+      problems.push(`options.preserveUnused[${i}]: must be a git hook name string`);
+    } else if (!VALID_HOOKS.includes(hook)) {
+      problems.push(`options.preserveUnused[${i}]: unknown git hook ${JSON.stringify(hook)}`);
+      unknownHook = true;
+    }
   }
   return unknownHook;
 }
@@ -179,11 +195,13 @@ function validate(raw) {
     } else if (key === "hooks") {
       unknownHook = validateHooks(value, problems) || unknownHook;
     } else if (key === "staged") {
-      problems.push(...validateStaged(value, "staged"));
+      validateStaged(value, problems);
+    } else if (key === "$schema") {
+      if (!nonBlankString(value)) problems.push("$schema: must be a non-blank string");
     } else if (VALID_HOOKS.includes(key)) {
       problems.push(`${key}: move this hook to "hooks.${key}"`);
     } else {
-      problems.push(`${key}: unknown key (expected options, hooks or staged)`);
+      problems.push(`${key}: unknown key (expected options, hooks, staged or $schema)`);
     }
   }
 
