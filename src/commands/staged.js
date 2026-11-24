@@ -1,4 +1,5 @@
 import { EmptyCommitError, runWithBackup } from "../backup.js";
+import { loadConfig } from "../config.js";
 import { createGit } from "../git.js";
 import { createRenderer, log } from "../log.js";
 import { realPath } from "../paths.js";
@@ -102,10 +103,12 @@ export async function runStaged({
 }
 
 /**
- * Run the commands of the top-level `staged` key. A setting comes from `flags`, then
- * `options`. Returns the exit code.
+ * Run the commands of the top-level `staged` key of the configuration in `cwd`, or in `file`.
+ * A setting comes from `flags`, then the `options` of the configuration. A configuration that
+ * cannot be loaded rejects. Returns the exit code.
  */
-export async function runConfiguredStaged({ loaded, flags = {}, cwd }) {
+export async function runConfiguredStaged({ file, flags = {}, cwd = process.cwd() }) {
+  const loaded = await loadConfig(cwd, { file });
   const settings = resolveSettings(loaded.options, flags);
   process.on("SIGINT", () => {});
   try {

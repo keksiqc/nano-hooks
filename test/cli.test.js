@@ -375,14 +375,17 @@ describe("nano-hooks install / uninstall", () => {
 
     expect(result.status).toBe(0);
     expect(result.stderr).toContain("core.hooksPath points outside .git");
+    expect(result.stderr).toContain("git config --unset core.hooksPath");
     expect(result.stderr).toContain("√ Installed pre-commit");
   });
 
-  it("install does not warn about core.hooksPath when only nano-hooks writes there", () => {
+  it("install only says where the hooks go when only nano-hooks writes to core.hooksPath", () => {
     const r = repo({ ".nano-hooks.json": hooks({ "pre-commit": "echo hi" }) });
     r.git("config", "core.hooksPath", ".githooks-outside");
 
-    expect(nano(r).stderr).toBe("√ Installed pre-commit\n");
+    expect(nano(r).stderr).toBe(
+      "- core.hooksPath is set: hooks go to .githooks-outside instead of .git/hooks.\n√ Installed pre-commit\n",
+    );
   });
 
   it("install reports an invalid config in the same style", () => {

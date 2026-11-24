@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
+import { relative } from "node:path";
 
 import { parseArgs } from "./args.js";
 import { install } from "./commands/install.js";
 import { runHook } from "./commands/run.js";
 import { runConfiguredStaged } from "./commands/staged.js";
 import { uninstall } from "./commands/uninstall.js";
-import { loadConfig } from "./config.js";
 import { NotGitRepositoryError } from "./git.js";
 import { HELP } from "./help.js";
 import { log } from "./log.js";
@@ -25,10 +25,15 @@ async function installHooks(config) {
     log.warn(`${error.message}. Hooks were not installed.`);
     return 0;
   }
-  const { installed, removed, skipped, hooksDir, foreignHooksDir } = result;
+  const { installed, removed, skipped, hooksDir, external, foreignHooksDir } = result;
+  if (external && !foreignHooksDir) {
+    log.info(
+      `core.hooksPath is set: hooks go to ${relative(process.cwd(), hooksDir)} instead of .git/hooks.`,
+    );
+  }
   if (foreignHooksDir) {
     log.warn(
-      `core.hooksPath points outside .git: ${hooksDir}. Another hooks manager, such as husky, can use the same directory.`,
+      `core.hooksPath points outside .git: ${hooksDir}. Another hooks manager, such as husky, can use the same directory. To write hooks to .git/hooks again, run: git config --unset core.hooksPath`,
     );
   }
   for (const name of installed) log.success(`Installed ${name}`);
@@ -52,10 +57,7 @@ const handlers = {
     return 0;
   },
 
-  async staged({ options }) {
-    const loaded = await loadConfig(process.cwd(), { file: options.config });
-    return runConfiguredStaged({ loaded, flags: options });
-  },
+  staged: ({ options }) => runConfiguredStaged({ file: options.config, flags: options }),
 
   run({ options, args: [hook] }) {
     if (!hook) throw new Error('Command "run" needs a hook name.');

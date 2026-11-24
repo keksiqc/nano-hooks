@@ -122,7 +122,7 @@ In a hook, every command runs in a `sh` shell, gets the hook arguments as `$1`, 
 - To skip the installation, set `NANO_HOOKS=0`. For example: `NANO_HOOKS=0 pnpm install`. Use it in CI or in a container build where you do not need hooks.
 - If the directory is not a git repository, `install` prints a warning and exits with code 0. A `prepare` script then does not fail an install that has no `.git` directory.
 - nano-hooks never overwrites or removes a hook that it did not write. The `install` command reports these hooks and continues.
-- If `core.hooksPath` points outside `.git`, `install` writes the hooks to that directory. If the directory also holds files that nano-hooks did not write, `install` prints a warning, because another tool such as husky can manage it. Make sure that only one tool manages the directory.
+- If `core.hooksPath` points outside `.git`, `install` writes the hooks to that directory and prints where they go. If the directory also holds files that nano-hooks did not write, `install` prints a warning, because another tool such as husky can manage it. Make sure that only one tool manages the directory. To write the hooks to `.git/hooks` again, run `git config --unset core.hooksPath`. nano-hooks never changes `core.hooksPath` itself.
 - If a hook that nano-hooks wrote earlier is no longer configured, nano-hooks removes it. To keep it, set `options.preserveUnused` to `true` or list the hook name.
 
 ## CLI
