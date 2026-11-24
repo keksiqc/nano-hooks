@@ -11,7 +11,7 @@ const stage = (r, path, content) => {
   r.git("add", path);
 };
 const fmtMap = { "*.js": "node fmt.js" };
-const hooks = (map) => JSON.stringify(map);
+const hooks = (map) => JSON.stringify({ hooks: map });
 const stagedConfig = JSON.stringify({ staged: fmtMap });
 
 const order = (options, ...args) => {
@@ -88,14 +88,14 @@ describe("nano-hooks staged", () => {
   });
 
   it("exits 1 and lists the problems when the config is invalid", () => {
-    const r = repo({ "a.js": "one\n", ".nano-hooks.json": JSON.stringify({ "pre-comit": "x" }) });
+    const r = repo({ "a.js": "one\n", ".nano-hooks.json": hooks({ "pre-comit": "x" }) });
     stage(r, "a.js", "uno\n");
 
     const result = nano(r, "staged");
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("× Invalid nano-hooks configuration in .nano-hooks.json:");
-    expect(result.stderr).toContain("pre-comit: unknown key");
+    expect(result.stderr).toContain('hooks.pre-comit: unknown git hook "pre-comit"');
   });
 
   it("--config points at a specific nano-hooks config file", () => {
@@ -184,7 +184,7 @@ describe("staged values in options", () => {
   });
 
   it("staged fails clearly when the configuration has no staged key", () => {
-    const r = repo({ ".nano-hooks.json": JSON.stringify({ "pre-commit": "echo a" }) });
+    const r = repo({ ".nano-hooks.json": hooks({ "pre-commit": "echo a" }) });
 
     const result = nano(r, "staged");
 
@@ -196,7 +196,8 @@ describe("staged values in options", () => {
 });
 
 const calls = (...rest) => ["nano-hooks staged", ...rest];
-const commands = (hook, staged = fmtMap) => JSON.stringify({ "pre-commit": hook, staged });
+const commands = (hook, staged = fmtMap) =>
+  JSON.stringify({ hooks: { "pre-commit": hook }, staged });
 
 describe("nano-hooks run with a hook that calls staged", () => {
   it("runs the staged step before the commands that follow", () => {
@@ -263,7 +264,7 @@ describe("lists of commands", () => {
 
   it("run runs a list of hook commands", () => {
     const r = repo({
-      ".nano-hooks.json": JSON.stringify({
+      ".nano-hooks.json": hooks({
         "commit-msg": ["echo first >> order", "echo second >> order"],
       }),
     });
@@ -274,7 +275,7 @@ describe("lists of commands", () => {
 
   it("run returns the exit code of the first failing command", () => {
     const r = repo({
-      ".nano-hooks.json": JSON.stringify({ "pre-push": ["exit 4", "touch ran"] }),
+      ".nano-hooks.json": hooks({ "pre-push": ["exit 4", "touch ran"] }),
     });
 
     expect(nano(r, "run", "pre-push").status).toBe(4);
@@ -349,7 +350,7 @@ describe("nano-hooks run", () => {
 
 describe("nano-hooks install / uninstall", () => {
   it("install writes hooks and uninstall removes them", () => {
-    const r = repo({ ".nano-hooks.json": JSON.stringify({ "pre-commit": "echo a" }) });
+    const r = repo({ ".nano-hooks.json": hooks({ "pre-commit": "echo a" }) });
     const hook = join(r.dir, ".git/hooks/pre-commit");
 
     const installed = nano(r);
@@ -385,13 +386,13 @@ describe("nano-hooks install / uninstall", () => {
   });
 
   it("install reports an invalid config in the same style", () => {
-    const r = repo({ ".nano-hooks.json": JSON.stringify({ "pre-comit": "x" }) });
+    const r = repo({ ".nano-hooks.json": hooks({ "pre-comit": "x" }) });
 
     const result = nano(r, "install");
 
     expect(result.status).toBe(1);
     expect(result.stderr).toMatch(/^× Invalid nano-hooks configuration in \.nano-hooks\.json:\n/u);
-    expect(result.stderr).toContain("pre-comit: unknown key");
+    expect(result.stderr).toContain('hooks.pre-comit: unknown git hook "pre-comit"');
   });
 
   it("says so when there is nothing to install or uninstall", () => {
@@ -402,9 +403,9 @@ describe("nano-hooks install / uninstall", () => {
   });
 
   it("reports removed and skipped hooks in the same style", () => {
-    const r = repo({ ".nano-hooks.json": JSON.stringify({ "pre-commit": "echo a" }) });
+    const r = repo({ ".nano-hooks.json": hooks({ "pre-commit": "echo a" }) });
     nano(r, "install");
-    r.write(".nano-hooks.json", JSON.stringify({ "pre-push": "echo b" }));
+    r.write(".nano-hooks.json", hooks({ "pre-push": "echo b" }));
     r.write(".git/hooks/pre-push", "#!/bin/sh\necho mine\n");
 
     const result = nano(r, "install");
@@ -441,7 +442,7 @@ describe("nano-hooks install / uninstall", () => {
 });
 
 describe("nano-hooks --config", () => {
-  const custom = JSON.stringify({ "pre-push": "echo a" });
+  const custom = hooks({ "pre-push": "echo a" });
 
   it("install -c reads hooks from that file", () => {
     const r = repo({ "custom.json": custom });
@@ -525,7 +526,7 @@ describe("end to end", () => {
     const r = repo({
       "a.js": "one\n",
       "package.json": JSON.stringify({
-        "nano-hooks": { "pre-commit": "nano-hooks staged", staged: fmtMap },
+        "nano-hooks": { hooks: { "pre-commit": "nano-hooks staged" }, staged: fmtMap },
       }),
     });
     expect(nano(r, "install").status).toBe(0);

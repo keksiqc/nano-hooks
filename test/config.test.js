@@ -17,7 +17,9 @@ async function problems(files) {
 
 describe("loadConfig", () => {
   it("reads the nano-hooks key from package.json", async () => {
-    const r = repo({ "package.json": json({ "nano-hooks": { "pre-commit": "echo hi" } }) });
+    const r = repo({
+      "package.json": json({ "nano-hooks": { hooks: { "pre-commit": "echo hi" } } }),
+    });
 
     expect(await loadConfig(r.dir)).toEqual({
       hooks: { "pre-commit": "echo hi" },
@@ -27,7 +29,7 @@ describe("loadConfig", () => {
   });
 
   it.each(["nano-hooks.config.json", ".nano-hooks.json"])("reads %s", async (name) => {
-    const r = repo({ [name]: json({ "commit-msg": "a" }) });
+    const r = repo({ [name]: json({ hooks: { "commit-msg": "a" } }) });
 
     expect((await loadConfig(r.dir)).hooks).toEqual({ "commit-msg": "a" });
   });
@@ -35,7 +37,7 @@ describe("loadConfig", () => {
   it("ignores a package.json without the nano-hooks key", async () => {
     const r = repo({
       "package.json": json({ name: "x" }),
-      ".nano-hooks.json": json({ "commit-msg": "a" }),
+      ".nano-hooks.json": json({ hooks: { "commit-msg": "a" } }),
     });
 
     expect((await loadConfig(r.dir)).hooks).toEqual({ "commit-msg": "a" });
@@ -46,7 +48,7 @@ describe("loadConfig", () => {
     ["package.json", ".nano-hooks.json"],
     ["nano-hooks.config.json", ".nano-hooks.json"],
   ])("rejects a project with both %s and %s", async (first, second) => {
-    const config = { "pre-commit": "x" };
+    const config = { hooks: { "pre-commit": "x" } };
     const contents = {
       "package.json": json({ "nano-hooks": config }),
       "nano-hooks.config.json": json(config),
@@ -68,9 +70,11 @@ describe("loadConfig", () => {
   it("keeps each hook as written", async () => {
     const r = repo({
       ".nano-hooks.json": json({
-        "pre-commit": ["nano-hooks staged", "tsc"],
-        "commit-msg": "x",
-        "pre-push": ["a", "b"],
+        hooks: {
+          "pre-commit": ["nano-hooks staged", "tsc"],
+          "commit-msg": "x",
+          "pre-push": ["a", "b"],
+        },
       }),
     });
 
@@ -135,15 +139,17 @@ describe("loadConfig", () => {
   });
 
   it("accepts a list of commands for a hook", async () => {
-    const r = repo({ ".nano-hooks.json": json({ "pre-push": ["pnpm lint", "pnpm test"] }) });
+    const r = repo({
+      ".nano-hooks.json": json({ hooks: { "pre-push": ["pnpm lint", "pnpm test"] } }),
+    });
 
     expect((await loadConfig(r.dir)).hooks).toEqual({ "pre-push": ["pnpm lint", "pnpm test"] });
   });
 
   it.each([[[]], [["ok", ""]], [["ok", 5]], [""], [5]])("rejects the hook value %j", async (v) => {
-    const message = await problems({ ".nano-hooks.json": json({ "pre-push": v }) });
+    const message = await problems({ ".nano-hooks.json": json({ hooks: { "pre-push": v } }) });
 
-    expect(message).toContain("pre-push: must be a command or a list of commands");
+    expect(message).toContain("hooks.pre-push: must be a command or a list of commands");
   });
 });
 
@@ -153,7 +159,7 @@ describe("top-level staged key", () => {
   it("reads the top-level staged key next to the hooks", async () => {
     const staged = { "*.js": "eslint", "*.css": ["a", "b"] };
     const r = repo({
-      ".nano-hooks.json": json({ "pre-commit": "nano-hooks staged", staged }),
+      ".nano-hooks.json": json({ hooks: { "pre-commit": "nano-hooks staged" }, staged }),
     });
 
     expect(await loadConfig(r.dir)).toEqual({
@@ -180,7 +186,7 @@ describe("top-level staged key", () => {
   });
 });
 
-const pre = (value) => ({ ".nano-hooks.json": json({ "pre-commit": value }) });
+const pre = (value) => ({ ".nano-hooks.json": json({ hooks: { "pre-commit": value } }) });
 
 describe("hook objects", () => {
   it.each([[{ run: "x" }], [{ staged: { "*": "y" } }], [{ run: "x", bail: true }], [{}]])(
@@ -189,7 +195,7 @@ describe("hook objects", () => {
       const message = await problems(pre(value));
 
       expect(message).toContain(
-        "pre-commit: an object is not allowed. Use a command or a list of commands.",
+        "hooks.pre-commit: an object is not allowed. Use a command or a list of commands.",
       );
       expect(message).toContain(
         'Move "staged" to the top level, and move allowEmpty, bail, parallel and restage to "options".',
@@ -199,27 +205,36 @@ describe("hook objects", () => {
 });
 
 describe("invalid configuration", () => {
-  it("rejects the keys of version 0.4 and the server-side hooks as unknown", async () => {
+  it("rejects a server-side hook and an option at the top level", async () => {
     const message = await problems({
-      ".nano-hooks.json": json({ hooks: {}, preserveUnused: true, "pre-receive": "x" }),
+      ".nano-hooks.json": json({ hooks: { "pre-receive": "x" }, preserveUnused: true }),
     });
 
-    for (const key of ["hooks", "preserveUnused", "pre-receive"]) {
-      expect(message).toContain(
-        `${key}: unknown key (expected a git hook name, staged or options)`,
-      );
-    }
+    expect(message).toContain('hooks.pre-receive: unknown git hook "pre-receive"');
+    expect(message).toContain("preserveUnused: unknown key (expected options, hooks or staged)");
+  });
+
+  it.each([[null], [[]], ["echo hi"]])("rejects a hooks section of %j", async (hooks) => {
+    const message = await problems({ ".nano-hooks.json": json({ hooks }) });
+
+    expect(message).toContain("hooks: must be an object");
+  });
+
+  it("points a top-level hook to its new location", async () => {
+    const message = await problems({
+      ".nano-hooks.json": json({ "pre-commit": "x", hooks: { "pre-push": "y" } }),
+    });
+
+    expect(message).toContain('pre-commit: move this hook to "hooks.pre-commit"');
   });
 
   it("reports every problem at once, with a list of the valid hooks for a misspelled one", async () => {
     const message = await problems({
-      ".nano-hooks.json": json({ "pre-comit": "x", "commit-msg": "", foo: 1 }),
+      ".nano-hooks.json": json({ hooks: { "pre-comit": "x", "commit-msg": "" }, foo: 1 }),
     });
 
-    expect(message).toContain(
-      "pre-comit: unknown key (expected a git hook name, staged or options)",
-    );
-    expect(message).toContain("commit-msg: must be a command or a list of commands");
+    expect(message).toContain('hooks.pre-comit: unknown git hook "pre-comit"');
+    expect(message).toContain("hooks.commit-msg: must be a command or a list of commands");
     expect(message).toContain("foo: unknown key");
     expect(message).toContain(`Valid hooks: ${VALID_HOOKS.join(", ")}`);
   });
@@ -240,8 +255,8 @@ describe("invalid configuration", () => {
 describe("loadConfig with an explicit file", () => {
   it("loads it instead of discovering one, relative to cwd", async () => {
     const r = repo({
-      ".nano-hooks.json": json({ "pre-commit": "discovered" }),
-      "config/custom.json": json({ "pre-push": "explicit" }),
+      ".nano-hooks.json": json({ hooks: { "pre-commit": "discovered" } }),
+      "config/custom.json": json({ hooks: { "pre-push": "explicit" } }),
     });
 
     const config = await loadConfig(r.dir, { file: "config/custom.json" });
@@ -250,7 +265,9 @@ describe("loadConfig with an explicit file", () => {
   });
 
   it("reads the nano-hooks key when the file is a package.json", async () => {
-    const r = repo({ "sub/package.json": json({ "nano-hooks": { "pre-commit": "x" } }) });
+    const r = repo({
+      "sub/package.json": json({ "nano-hooks": { hooks: { "pre-commit": "x" } } }),
+    });
 
     expect((await loadConfig(r.dir, { file: "sub/package.json" })).hooks).toEqual({
       "pre-commit": "x",
@@ -280,7 +297,7 @@ describe("loadConfig with an explicit file", () => {
   });
 
   it("names the file in validation errors", async () => {
-    const r = repo({ "custom.json": json({ "pre-comit": "x" }) });
+    const r = repo({ "custom.json": json({ hooks: { "pre-comit": "x" } }) });
 
     await expect(loadConfig(r.dir, { file: "custom.json" })).rejects.toThrow(
       "Invalid nano-hooks configuration in custom.json:",

@@ -13,7 +13,7 @@ import { FAIL, FMT, linkCli, testRepo, testTempDir } from "./helpers.js";
 const DIR_WITH_SPACE_AND_QUOTE = process.platform === "win32" ? "my proj it's" : `my "proj" it's`;
 
 const repo = (hooks = {}, options, extra = {}) =>
-  testRepo({ ".nano-hooks.json": JSON.stringify({ ...hooks, ...extra }) }, options);
+  testRepo({ ".nano-hooks.json": JSON.stringify({ hooks, ...extra }) }, options);
 
 const configure = (r, config) => r.write(".nano-hooks.json", JSON.stringify(config));
 
@@ -52,7 +52,7 @@ describe("install", () => {
       "{ nano-hooks staged\n} || exit $?\necho b $1\n",
     );
 
-    configure(r, { "pre-commit": "echo a", staged: { "*.js": "echo" } });
+    configure(r, { hooks: { "pre-commit": "echo a" }, staged: { "*.js": "echo" } });
     await install({ cwd: r.dir });
 
     expect(readFileSync(hookPath(r, "pre-commit"), "utf8")).not.toContain("nano-hooks staged");
@@ -61,11 +61,13 @@ describe("install", () => {
   it("adds no cd and no --config, also from a sub-package or with a named file", async () => {
     const r = testRepo({
       "packages/app/.nano-hooks.json": JSON.stringify({
-        "pre-push": "echo push",
-        "pre-commit": "nano-hooks staged",
+        hooks: {
+          "pre-push": "echo push",
+          "pre-commit": "nano-hooks staged",
+        },
         staged: { "*.js": "echo" },
       }),
-      "tools/hooks.json": JSON.stringify({ "pre-commit": "echo named" }),
+      "tools/hooks.json": JSON.stringify({ hooks: { "pre-commit": "echo named" } }),
     });
 
     await install({ cwd: join(r.dir, "packages/app"), config: ".nano-hooks.json" });
@@ -90,8 +92,10 @@ describe("install", () => {
       "fmt.js": FMT,
       "a.js": "one\n",
       "tools/hooks.json": JSON.stringify({
-        "pre-push": "echo push",
-        "pre-commit": "nano-hooks staged --config tools/hooks.json",
+        hooks: {
+          "pre-push": "echo push",
+          "pre-commit": "nano-hooks staged --config tools/hooks.json",
+        },
         staged: { "*.js": "node fmt.js" },
       }),
     });
@@ -177,7 +181,7 @@ describe("install", () => {
   it("removes managed hooks that are no longer configured", async () => {
     const r = repo({ "pre-commit": "echo a", "commit-msg": "echo b" });
     await install({ cwd: r.dir });
-    configure(r, { "pre-commit": "echo a" });
+    configure(r, { hooks: { "pre-commit": "echo a" } });
 
     const result = await install({ cwd: r.dir });
 
@@ -189,7 +193,7 @@ describe("install", () => {
   it("options.preserveUnused: true keeps unconfigured managed hooks", async () => {
     const r = repo({ "pre-commit": "echo a", "commit-msg": "echo b" });
     await install({ cwd: r.dir });
-    configure(r, { "pre-commit": "echo a", options: { preserveUnused: true } });
+    configure(r, { hooks: { "pre-commit": "echo a" }, options: { preserveUnused: true } });
 
     await install({ cwd: r.dir });
 
@@ -199,7 +203,10 @@ describe("install", () => {
   it("options.preserveUnused: [name] keeps only that hook", async () => {
     const r = repo({ "pre-commit": "echo a", "commit-msg": "echo b", "pre-push": "echo c" });
     await install({ cwd: r.dir });
-    configure(r, { "pre-commit": "echo a", options: { preserveUnused: ["commit-msg"] } });
+    configure(r, {
+      hooks: { "pre-commit": "echo a" },
+      options: { preserveUnused: ["commit-msg"] },
+    });
 
     await install({ cwd: r.dir });
 
@@ -261,7 +268,7 @@ describe("install", () => {
       "fmt.js": FMT,
       "packages/app/a.js": "one\n",
       "packages/app/.nano-hooks.json": JSON.stringify({
-        "pre-commit": "cd packages/app && nano-hooks staged",
+        hooks: { "pre-commit": "cd packages/app && nano-hooks staged" },
         staged: { "*.js": "node fmt.js" },
       }),
     });
@@ -317,7 +324,9 @@ describe("uninstall", () => {
 describe("hooks that call staged", () => {
   it("starts every command in the repository root, also from a sub-package", async () => {
     const r = testRepo({
-      "packages/app/.nano-hooks.json": JSON.stringify({ "pre-commit": "pwd > where" }),
+      "packages/app/.nano-hooks.json": JSON.stringify({
+        hooks: { "pre-commit": "pwd > where" },
+      }),
     });
     await install({ cwd: join(r.dir, "packages/app") });
 
@@ -332,7 +341,7 @@ describe("hooks that call staged", () => {
       "fail.js": FAIL,
       "a.js": "one\n",
       ".nano-hooks.json": JSON.stringify({
-        "pre-commit": ["nano-hooks staged", "touch ran"],
+        hooks: { "pre-commit": ["nano-hooks staged", "touch ran"] },
         staged: { "*.js": "node fail.js" },
       }),
     });
@@ -349,7 +358,7 @@ describe("hooks that call staged", () => {
       "fmt.js": FMT,
       "a.js": "one\n",
       ".nano-hooks.json": JSON.stringify({
-        "pre-commit": "touch ran",
+        hooks: { "pre-commit": "touch ran" },
         staged: { "*.js": "node fmt.js" },
       }),
     });
@@ -390,7 +399,7 @@ describe("hooks that call staged", () => {
   it.each(Object.entries(runners))(
     "runs the staged step with a custom config through %s",
     async (_, runner) => {
-      const r = stagedRepo({ "pre-commit": call, staged });
+      const r = stagedRepo({ hooks: { "pre-commit": call }, staged });
 
       await runner(r, configFile);
 
@@ -401,7 +410,7 @@ describe("hooks that call staged", () => {
   it.each(Object.entries(runners))(
     "runs the staged step first and then the other commands through %s",
     async (_, runner) => {
-      const r = stagedRepo({ "pre-commit": [call, "cp a.js seen"], staged });
+      const r = stagedRepo({ hooks: { "pre-commit": [call, "cp a.js seen"] }, staged });
 
       await runner(r, configFile);
 

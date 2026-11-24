@@ -104,14 +104,32 @@ function validateStaged(staged, path) {
   return problems;
 }
 
-function validateHook(name, value) {
+function validateHook(path, value) {
   if (isCommandList(value)) return [];
   if (isObject(value)) {
     return [
-      `${name}: an object is not allowed. Use a command or a list of commands. Move "staged" to the top level, and move allowEmpty, bail, parallel and restage to "options".`,
+      `${path}: an object is not allowed. Use a command or a list of commands. Move "staged" to the top level, and move allowEmpty, bail, parallel and restage to "options".`,
     ];
   }
-  return [`${name}: must be a command or a list of commands`];
+  return [`${path}: must be a command or a list of commands`];
+}
+
+/** Check the `hooks` object. True when it names an unknown hook. */
+function validateHooks(hooks, problems) {
+  if (!isObject(hooks)) {
+    problems.push("hooks: must be an object");
+    return false;
+  }
+  let unknownHook = false;
+  for (const [name, value] of Object.entries(hooks)) {
+    if (VALID_HOOKS.includes(name)) {
+      problems.push(...validateHook(`hooks.${name}`, value));
+    } else {
+      problems.push(`hooks.${name}: unknown git hook "${name}"`);
+      unknownHook = true;
+    }
+  }
+  return unknownHook;
 }
 
 /** Check `options.preserveUnused`. True when it names an unknown hook. */
@@ -132,6 +150,10 @@ function validatePreserveUnused(value, problems) {
 
 /** Check the `options` object. True when `preserveUnused` names an unknown hook. */
 function validateOptions(options, problems) {
+  if (!isObject(options)) {
+    problems.push("options: must be an object");
+    return false;
+  }
   let unknownHook = false;
   for (const [name, value] of Object.entries(options)) {
     if (!OPTIONS.includes(name)) {
@@ -152,22 +174,16 @@ function validate(raw) {
   let unknownHook = false;
 
   for (const [key, value] of Object.entries(raw)) {
-    if (key === "options") continue;
-    if (key === "staged") {
+    if (key === "options") {
+      unknownHook = validateOptions(value, problems) || unknownHook;
+    } else if (key === "hooks") {
+      unknownHook = validateHooks(value, problems) || unknownHook;
+    } else if (key === "staged") {
       problems.push(...validateStaged(value, "staged"));
     } else if (VALID_HOOKS.includes(key)) {
-      problems.push(...validateHook(key, value));
+      problems.push(`${key}: move this hook to "hooks.${key}"`);
     } else {
-      problems.push(`${key}: unknown key (expected a git hook name, staged or options)`);
-      unknownHook = true;
-    }
-  }
-
-  if ("options" in raw) {
-    if (!isObject(raw.options)) {
-      problems.push("options: must be an object");
-    } else if (validateOptions(raw.options, problems)) {
-      unknownHook = true;
+      problems.push(`${key}: unknown key (expected options, hooks or staged)`);
     }
   }
 
@@ -198,7 +214,7 @@ function loadConfigSync(cwd, file) {
     throw new Error([`Invalid nano-hooks configuration in ${found.file}:`, ...lines].join("\n"));
   }
 
-  const { options = {}, staged, ...hooks } = found.raw;
+  const { options = {}, hooks = {}, staged } = found.raw;
   const { preserveUnused = false, ...flags } = options;
   return { hooks, staged, preserveUnused, options: flags };
 }

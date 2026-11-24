@@ -28,8 +28,10 @@ nano-hooks requires Node 22, or Node 24 and later.
    {
      "scripts": { "prepare": "nano-hooks" },
      "nano-hooks": {
-       "pre-commit": ["nano-hooks staged", "npm run typecheck"],
-       "commit-msg": "node scripts/check-msg.js $1",
+       "hooks": {
+         "pre-commit": ["nano-hooks staged", "npm run typecheck"],
+         "commit-msg": "node scripts/check-msg.js $1"
+       },
        "staged": {
          "*.{js,ts}": "eslint --fix",
          "*.css": ["prettier --write"]
@@ -44,7 +46,7 @@ nano-hooks requires Node 22, or Node 24 and later.
 
 nano-hooks reads its configuration from one of these places, in this order: the `nano-hooks` key in `package.json`, the file `nano-hooks.config.json`, and the file `.nano-hooks.json`. All of them hold plain JSON. nano-hooks never runs your code to read the configuration. It looks only in the directory where you run it, unless you set `--config`. If more than one of these places exists, nano-hooks stops with an error that names them. Keep one.
 
-The keys of the configuration are the names of Git hooks, the key `staged`, and the key `options`. Each hook is one of two things:
+The top-level configuration keys are `options`, `hooks`, and `staged`. The `hooks` key maps each Git hook name to a command or a list of commands.
 
 - A command, such as `"commit-msg": "commitlint --edit \"$1\""`.
 - A list of commands, such as `"pre-push": ["npm run lint", "npm test"]`. The commands run one after the other, and the first command that fails stops the list.
@@ -55,9 +57,11 @@ A hook is never an object, and nano-hooks adds no step to a hook. To run the `st
 {
   "nano-hooks": {
     "options": { "bail": true, "preserveUnused": ["post-merge"] },
-    "pre-commit": ["nano-hooks staged", "npm run typecheck", "npm test"],
-    "commit-msg": "commitlint --edit \"$1\"",
-    "pre-push": ["npm run lint", "npm test"],
+    "hooks": {
+      "pre-commit": ["nano-hooks staged", "npm run typecheck", "npm test"],
+      "commit-msg": "commitlint --edit \"$1\"",
+      "pre-push": ["npm run lint", "npm test"]
+    },
     "staged": {
       "*.{js,ts,tsx}": ["oxlint --fix", "prettier --write"],
       "*.json": "prettier --write"
@@ -79,13 +83,13 @@ These keys of `options` control the `staged` step. A command line option of `nan
 
 The `options` section accepts one more key. `preserveUnused` is `true`, or a list of hook names. It keeps hooks that nano-hooks wrote earlier but that are no longer in the configuration.
 
-If the configuration has a mistake, nano-hooks rejects it and lists every problem with the file name and the key. For example: `pre-comit: unknown key (expected a git hook name, staged or options)`.
+If the configuration has a mistake, nano-hooks rejects it and lists every problem with the file name and key. A misspelled hook produces an error such as `hooks.pre-comit: unknown git hook "pre-comit"`.
 
-Git starts every hook in the root of the repository, and nano-hooks runs your commands there. `nano-hooks staged` reads the configuration from the directory where it runs. If the configuration is in a subdirectory, write the `cd` in the hook, for example `"pre-commit": "cd packages/app && nano-hooks staged"`. If the configuration file has another name, write `nano-hooks staged --config <path>` in the hook.
+Git starts every hook in the root of the repository, and nano-hooks runs your commands there. `nano-hooks staged` reads the configuration from the directory where it runs. If the configuration is in a subdirectory, set `hooks.pre-commit` to a command such as `cd packages/app && nano-hooks staged`. If the configuration file has another name, write `nano-hooks staged --config <path>` in the hook.
 
 ### Upgrading from 0.6
 
-In 0.6, the `staged` step and its values sat inside the `pre-commit` object. That shape is now an error. This is a 0.6 configuration:
+Move each top-level Git hook into `hooks`. If a hook uses the 0.6 object form, move its staged patterns to `staged`, move its settings to `options`, and use `nano-hooks staged` in the hook's command list. A 0.6 configuration could look like this.
 
 ```json
 {
@@ -93,17 +97,17 @@ In 0.6, the `staged` step and its values sat inside the `pre-commit` object. Tha
 }
 ```
 
-This is the same configuration now:
+The equivalent configuration uses all three sections.
 
 ```json
 {
   "options": { "bail": true },
-  "pre-commit": ["nano-hooks staged", "npm test"],
+  "hooks": { "pre-commit": ["nano-hooks staged", "npm test"] },
   "staged": { "*.js": "eslint --fix" }
 }
 ```
 
-An old file gives this error: `pre-commit: an object is not allowed. Use a command or a list of commands. Move "staged" to the top level, and move allowEmpty, bail, parallel and restage to "options".` Also, `install` no longer adds `cd` or `--config` to a call of `nano-hooks staged`. After you change the configuration, run `nano-hooks install` again.
+Include any needed `cd` or `--config` in the hook command itself. After you change the configuration, run `nano-hooks install` again.
 
 ### Commands in hooks and in `staged`
 
@@ -152,7 +156,7 @@ The `staged` command runs the commands of the `staged` key. A hook calls it. You
 
 The `staged` command comes from [nano-staged](https://github.com/usmanyunusov/nano-staged) by Usman Yunusov. nano-hooks is not affiliated with nano-staged. See [Credits](#credits).
 
-To move from nano-staged, copy your nano-staged configuration into the top-level `staged` key, and add `nano-hooks staged` to your `pre-commit` hook. nano-hooks reads only JSON, so a nano-staged function task must become a command. nano-hooks does not read `.nano-staged.*` files or the `nano-staged` key. It runs only on staged files, so it does not include the `--diff` and `--unstaged` modes of nano-staged.
+To move from nano-staged, copy your nano-staged configuration into the top-level `staged` key, and add `nano-hooks staged` to `hooks.pre-commit`. nano-hooks reads only JSON, so a nano-staged function task must become a command. nano-hooks does not read `.nano-staged.*` files or the `nano-staged` key. It runs only on staged files, so it does not include the `--diff` and `--unstaged` modes of nano-staged.
 
 If the file list is too long for one command line, nano-hooks runs the command several times, each time on a part of the files.
 
