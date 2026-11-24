@@ -1,3 +1,5 @@
+![banner](.github/assets/banner.webp)
+
 # nano-hooks
 
 [![version](https://shieldcn.dev/npm/nano-hooks.svg?variant=secondary)][npm-href]
