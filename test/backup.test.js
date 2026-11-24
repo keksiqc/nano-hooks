@@ -1,17 +1,18 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
 import { runWithBackup } from "../src/backup.js";
 import { createGit } from "../src/git.js";
-import { FMT, testRepo } from "./helpers.js";
+import { FMT, nanoWith, testRepo } from "./helpers.js";
 
 const repo = (files) => testRepo({ "fmt.js": FMT, ...files });
 
 const patchPaths = (r) => ({
   original: join(r.dir, ".git", "nano-hooks.patch"),
   unstaged: join(r.dir, ".git", "nano-hooks_partial.patch"),
+  index: join(r.dir, ".git", "nano-hooks.index"),
 });
 
 async function work(r, execute, options = {}) {
@@ -58,6 +59,7 @@ describe("runWithBackup", () => {
     expect(r.read("b.js")).toBe("untouched change\n");
     expect(existsSync(patchPaths(r).original)).toBe(false);
     expect(existsSync(patchPaths(r).unstaged)).toBe(false);
+    expect(existsSync(patchPaths(r).index)).toBe(false);
     expect(steps.map((step) => step.state)).toEqual(steps.map(() => "done"));
   });
 
@@ -74,11 +76,11 @@ describe("runWithBackup", () => {
       "Running tasks for staged files",
       "Applying modifications from tasks",
       "Restoring unstaged changes for staged files",
-      "Cleaning up temporary patch files",
+      "Cleaning up recovery files",
     ]);
   });
 
-  it("restores the original index and worktree and removes the patches when a task fails", async () => {
+  it("restores the original index and worktree when a task stages changes and fails", async () => {
     const r = repo({ "a.js": "one\ntwo\nthree\n", "b.js": "keep\n" });
     partiallyStage(r);
     r.write("b.js", "unrelated change\n");
@@ -90,6 +92,7 @@ describe("runWithBackup", () => {
 
     const { promise } = await work(r, () => {
       r.write("a.js", "garbage\n");
+      r.git("add", "a.js", "b.js");
       throw new Error("task failed");
     });
     const errors = await errorsOf(promise);
@@ -101,6 +104,54 @@ describe("runWithBackup", () => {
     expect(r.read("b.js")).toBe("unrelated change\n");
     expect(existsSync(patchPaths(r).original)).toBe(false);
     expect(existsSync(patchPaths(r).unstaged)).toBe(false);
+    expect(existsSync(patchPaths(r).index)).toBe(false);
+  });
+
+  it("backs up a split index without relying on its shared index file", async () => {
+    const r = repo({ "a.js": "one\ntwo\nthree\n" });
+    r.git("config", "core.splitIndex", "true");
+    r.git("update-index", "--split-index");
+    partiallyStage(r);
+    const original = r.git("ls-files", "--stage");
+    const shared = resolve(r.dir, r.git("rev-parse", "--shared-index-path").trim());
+    expect(existsSync(shared)).toBe(true);
+
+    const { promise } = await work(r, () => {
+      r.write("a.js", "task change\n");
+      r.git("add", "a.js");
+      rmSync(shared);
+      throw new Error("task failed");
+    });
+
+    expect((await errorsOf(promise)).map((error) => error.message)).toEqual(["task failed"]);
+    expect(r.git("ls-files", "--stage")).toBe(original);
+    expect(r.read("a.js")).toBe("uno\ntwo\ntres\n");
+  });
+
+  it("restores the active alternate index", async () => {
+    const r = repo({
+      "a.js": "one\ntwo\nthree\n",
+      ".nano-hooks.json": JSON.stringify({
+        staged: { "a.js": "node fail.js" },
+      }),
+      "fail.js": `require("node:fs").writeFileSync("a.js", "task change\\n");
+require("node:child_process").execFileSync("git", ["add", "a.js"]);
+process.exit(1);`,
+    });
+    const env = { GIT_INDEX_FILE: join(r.dir, ".git", "alternate-index") };
+    const git = (...args) => createGit(r.dir).exec(args, { env });
+    await git("read-tree", "HEAD");
+    r.write("a.js", "uno\ntwo\nthree\n");
+    await git("add", "a.js");
+    r.write("a.js", "uno\ntwo\ntres\n");
+
+    const result = nanoWith(r, { env }, "staged");
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Restoring to original state because of errors");
+    expect(await git("show", ":a.js")).toBe("uno\ntwo\nthree\n");
+    expect(r.git("show", ":a.js")).toBe("one\ntwo\nthree\n");
+    expect(r.read("a.js")).toBe("uno\ntwo\ntres\n");
   });
 
   it("keeps the patches and reports both errors when the rollback fails", async () => {
@@ -108,18 +159,20 @@ describe("runWithBackup", () => {
     partiallyStage(r);
 
     const { promise } = await work(r, () => {
-      writeFileSync(join(r.dir, ".git", "index.lock"), "");
+      writeFileSync(join(r.dir, ".git", "index.lock"), "other writer");
       throw new Error("task failed");
     });
     const messages = (await errorsOf(promise)).map((error) => error.message);
-    rmSync(join(r.dir, ".git", "index.lock"));
+    expect(readFileSync(join(r.dir, ".git", "index.lock"), "utf8")).toBe("other writer");
 
     expect(messages[0]).toBe("task failed");
     expect(messages).toHaveLength(3);
     expect(messages[2]).toContain(patchPaths(r).original);
     expect(messages[2]).toContain(patchPaths(r).unstaged);
+    expect(messages[2]).toContain(patchPaths(r).index);
     expect(existsSync(patchPaths(r).original)).toBe(true);
     expect(existsSync(patchPaths(r).unstaged)).toBe(true);
+    expect(existsSync(patchPaths(r).index)).toBe(true);
   });
 
   it("keeps the patches when the unstaged changes cannot be restored", async () => {
@@ -135,7 +188,7 @@ describe("runWithBackup", () => {
     expect(messages[1]).toContain(patchPaths(r).unstaged);
     expect(existsSync(patchPaths(r).original)).toBe(true);
     expect(existsSync(patchPaths(r).unstaged)).toBe(true);
-    expect(steps.map((step) => step.title)).not.toContain("Cleaning up temporary patch files");
+    expect(steps.map((step) => step.title)).not.toContain("Cleaning up recovery files");
   });
 
   it("reports a cleanup failure next to the earlier errors", async () => {

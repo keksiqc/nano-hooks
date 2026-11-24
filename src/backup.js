@@ -1,7 +1,7 @@
-import { existsSync, statSync, unlinkSync } from "node:fs";
+import { constants, copyFileSync, existsSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
-import { createGit } from "./git.js";
+import { createGit, restoreIndex } from "./git.js";
 
 const hasContent = (path) => existsSync(path) && statSync(path).size > 0;
 
@@ -16,11 +16,10 @@ export class EmptyCommitError extends Error {
 
 /**
 /**
- * Run `execute` on the staged files with the working tree protected: back up the unstaged
- * changes, run the tasks, add their changes to the index and restore the unstaged changes.
- * A failure rolls back to the original state.
+ * Snapshot the index and the unstaged changes before running tasks. A failed task restores
+ * the original index and tracked changes.
  *
- * The recovery patches in `dotPath` stay, and the error lists them, when a rollback or a
+ * The recovery files in `dotPath` stay, and the error lists them, when a rollback or a
  * restoration did not finish. A later run refuses to start while they exist.
  *
  * `files` is the result of `stagedFiles`. With `restage: false`, the changes of the tasks stay
@@ -38,9 +37,10 @@ export async function runWithBackup({
 }) {
   const original = join(dotPath, "nano-hooks.patch");
   const unstaged = join(dotPath, "nano-hooks_partial.patch");
-  const patches = [original, unstaged];
+  const snapshot = join(dotPath, "nano-hooks.index");
+  const backups = [original, unstaged, snapshot];
 
-  assertNoLeftovers(patches);
+  assertNoLeftovers(backups);
 
   const errors = [];
   const ctx = {
@@ -48,6 +48,7 @@ export async function runWithBackup({
     step: createStepRunner(onStep, errors),
     original,
     unstaged,
+    snapshot,
     modified: [...files.changed, ...files.deleted],
     files,
     execute,
@@ -55,39 +56,57 @@ export async function runWithBackup({
     allowEmpty,
   };
 
-  if (!(await ctx.step("Preparing nano-hooks", () => ctx.git.diff(original)))) {
-    try {
-      removePatches(patches);
-    } catch (error) {
-      errors.push(error);
-    }
-    throw new AggregateError(errors, "Staged tasks failed");
-  }
+  const index = await prepareBackups(ctx, backups, errors);
+  if (!index) throw new AggregateError(errors, "Staged tasks failed");
 
   const ok = await runTasks(ctx);
-  const recovered = await recover(ok, ctx);
+  const recovered = await recover(ok, ctx, index);
 
   if (recovered) {
-    await ctx.step("Cleaning up temporary patch files", () => removePatches(patches));
+    await ctx.step("Cleaning up recovery files", () => removeBackups(backups));
   } else {
-    const kept = patches.filter((patch) => existsSync(patch));
-    if (kept.length > 0) errors.push(keptPatchesError(kept));
+    const kept = backups.filter((file) => existsSync(file));
+    if (kept.length > 0) errors.push(keptBackupsError(kept));
   }
 
   if (errors.length > 0) throw new AggregateError(errors, "Staged tasks failed");
 }
 
-function assertNoLeftovers(patches) {
-  const leftovers = patches.filter((patch) => existsSync(patch));
+async function prepareBackups({ git, step, original, snapshot }, backups, errors) {
+  let index;
+  const prepared = await step("Preparing nano-hooks", async () => {
+    const path = await git.indexPath();
+    // The exclusive copy also prevents overlapping runs from writing the same patches.
+    copyFileSync(path, snapshot, constants.COPYFILE_EXCL);
+    index = path;
+    const env = { GIT_INDEX_FILE: snapshot };
+    if ((await git.exec(["rev-parse", "--shared-index-path"], { env })).trim()) {
+      // Make the backup independent of shared index files Git may expire.
+      await git.exec(["update-index", "--no-split-index"], { env });
+    }
+    await git.diff(original);
+  });
+  if (prepared) return index;
+  if (index) {
+    try {
+      removeBackups(backups);
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+}
+
+function assertNoLeftovers(backups) {
+  const leftovers = backups.filter((file) => existsSync(file));
   if (leftovers.length === 0) return;
   throw new Error(
-    `nano-hooks found recovery patches from an earlier run that did not finish:\n${listPaths(leftovers)}\nUse them to recover your changes, then delete them. nano-hooks did not change your repository.`,
+    `nano-hooks found recovery files from another run:\n${listPaths(leftovers)}\nIf that run has ended, use the files to recover your changes, then delete them.`,
   );
 }
 
-const keptPatchesError = (kept) =>
+const keptBackupsError = (kept) =>
   new Error(
-    `nano-hooks kept these recovery patches so that you can recover your changes:\n${listPaths(kept)}\nDelete them when you are done. nano-hooks does not run while they exist.`,
+    `nano-hooks kept these recovery files so that you can recover your changes:\n${listPaths(kept)}\nDelete them when you are done. nano-hooks does not run while they exist.`,
   );
 
 /** Run one step: report it to the observer, set its state and collect its error. */
@@ -110,11 +129,11 @@ function createStepRunner(onStep, errors) {
   };
 }
 
-function removePatches(patches) {
+function removeBackups(backups) {
   const failures = [];
-  for (const patch of patches) {
+  for (const file of backups) {
     try {
-      if (existsSync(patch)) unlinkSync(patch);
+      if (existsSync(file)) unlinkSync(file);
     } catch (error) {
       failures.push(error);
     }
@@ -163,9 +182,10 @@ async function restoreUnstaged(git, unstaged) {
 }
 
 /** Roll back after a failure, or restore the unstaged changes. True when that worked. */
-function recover(ok, { git, step, original, unstaged, modified }) {
+function recover(ok, { git, step, original, unstaged, modified, snapshot }, index) {
   if (!ok) {
     return step("Restoring to original state because of errors", async () => {
+      restoreIndex(snapshot, index);
       await git.checkout(["."]);
       if (hasContent(original)) await git.apply(original);
     });

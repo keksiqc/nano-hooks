@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, realpathSync, rmSync } from "node:fs";
+import { constants, copyFileSync, existsSync, realpathSync, renameSync, rmSync } from "node:fs";
 import { basename, dirname, isAbsolute, normalize, relative, resolve, sep } from "node:path";
 
 import { run } from "./exec.js";
@@ -77,8 +77,24 @@ async function readGitPaths(exec) {
   }
 }
 
-async function checkWouldChange(cwd, exec, paths) {
-  const index = resolve(cwd, (await exec(["rev-parse", "--git-path", "index"])).trim());
+async function readIndexPath(cwd, exec) {
+  const path = await exec(["rev-parse", "--git-path", "index"]);
+  return realPath(resolve(cwd, path.replace(/\r?\n$/u, "")));
+}
+
+/** Replace the index through Git's lock file, leaving any other writer's lock alone. */
+export function restoreIndex(snapshot, index) {
+  const lock = `${index}.lock`;
+  copyFileSync(snapshot, lock, constants.COPYFILE_EXCL);
+  try {
+    renameSync(lock, index);
+  } catch (error) {
+    rmSync(lock, { force: true });
+    throw error;
+  }
+}
+
+async function checkWouldChange(index, exec, paths) {
   const copy = `${index}.nano-hooks-check`;
   const env = { GIT_INDEX_FILE: copy };
   try {
@@ -116,7 +132,10 @@ export function createGit(cwd = process.cwd()) {
     exec,
     hooksInfo,
     getGitPaths: () => readGitPaths(exec),
-    wouldChange: (paths) => checkWouldChange(cwd, exec, paths),
+    indexPath: () => readIndexPath(cwd, exec),
+    async wouldChange(paths) {
+      return checkWouldChange(await readIndexPath(cwd, exec), exec, paths);
+    },
     stagedFiles: () => readStagedFiles(exec),
 
     async toplevel() {

@@ -162,9 +162,9 @@ To move from nano-staged, copy your nano-staged configuration into the top-level
 
 If the file list is too long for one command line, nano-hooks runs the command several times, each time on a part of the files.
 
-When the commands run, nano-hooks sets aside the unstaged changes in partially staged files. It adds formatter changes back to the commit. If you set `restage` to `false`, it leaves these changes in the working tree instead. For a partially staged file, this can cause a merge conflict when nano-hooks restores your unstaged changes. If a command fails, it rolls back all changes.
+When the commands run, nano-hooks sets aside the unstaged changes in partially staged files. It adds formatter changes back to the commit. If you set `restage` to `false`, it leaves these changes in the working tree instead. For a partially staged file, this can cause a merge conflict when nano-hooks restores your unstaged changes. If a command fails, nano-hooks restores the original Git index and the tracked files it backed up.
 
-During a run, nano-hooks saves your changes in two patch files in the Git directory: `nano-hooks.patch` and `nano-hooks_partial.patch`. It deletes them when the run succeeds or when a rollback succeeds. If a rollback or the restoration of your unstaged changes fails, for example because of a merge conflict, nano-hooks keeps the patch files and prints their paths. Run `git apply --unidiff-zero` on a patch file to get your changes back, then delete both files. While these files exist, `nano-hooks staged` stops before it changes anything and prints their paths.
+During a run, nano-hooks saves the index as `nano-hooks.index` in the Git directory. It saves the original unstaged changes in `nano-hooks.patch` and the hidden changes from partially staged files in `nano-hooks_partial.patch`. It deletes these files after a successful run or rollback. If recovery fails, nano-hooks keeps the files and prints their paths. Use `GIT_INDEX_FILE=/path/to/nano-hooks.index git diff --cached` to inspect the original staged changes. The patch files can be applied with `git apply --unidiff-zero` to the corresponding file versions. Once you have recovered your changes, delete the recovery files so `nano-hooks staged` can run again.
 
 ## Benchmarks
 
