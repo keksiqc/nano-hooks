@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { onTestFinished } from "vitest";
 
-export const CLI = fileURLToPath(new URL("../src/cli.js", import.meta.url));
+const CLI = fileURLToPath(new URL("../src/cli.js", import.meta.url));
 
 export const FMT = `const fs = require("node:fs");
 for (const file of process.argv.slice(2)) {
@@ -27,7 +27,7 @@ export function linkCli(dir) {
 }
 
 /** Create an empty temp directory that is not a git repository. */
-export function createTempDir(dirName = "work") {
+function createTempDir(dirName = "work") {
   const root = mkdtempSync(join(tmpdir(), "nano-hooks-"));
   const dir = join(root, dirName);
   mkdirSync(dir, { recursive: true });
@@ -38,7 +38,7 @@ export function createTempDir(dirName = "work") {
  * Create a temp git repo with an initial commit containing `files`.
  * `options.dirName` names the repo directory (to test unusual paths).
  */
-export function createRepo(files = {}, options = {}) {
+function createRepo(files = {}, options = {}) {
   const { dir, cleanup } = createTempDir(options.dirName);
 
   function git(...args) {

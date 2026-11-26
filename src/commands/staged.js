@@ -57,7 +57,7 @@ export async function runStaged({
  * A setting comes from `flags`, then the `options` of the configuration. A configuration that
  * cannot be loaded rejects. Returns the exit code.
  */
-export async function runConfiguredStaged({ file, flags = {}, cwd = process.cwd() }) {
+async function runConfiguredStaged({ file, flags = {}, cwd = process.cwd() }) {
   const loaded = await loadConfig(cwd, { file });
   const settings = resolveSettings(loaded.options, flags);
   process.on("SIGINT", () => {});

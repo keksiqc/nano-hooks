@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-export const root = resolve(import.meta.dirname, "..");
+const root = resolve(import.meta.dirname, "..");
 
 /** The runners to compare. `nano-hooks` is this checkout, the other two come from npm. */
 export const RUNNERS = [
@@ -29,7 +29,7 @@ export async function exec(file, args, options = {}) {
 export const makeTempDir = (prefix) => mkdtemp(join(tmpdir(), `${prefix}-`));
 
 /** Pack this checkout the way `npm publish` would, so the local runner has the published files only. */
-export async function packLocal(destination) {
+async function packLocal(destination) {
   const output = await exec(
     "npm",
     ["pack", "--json", "--ignore-scripts", "--pack-destination", destination],
