@@ -521,6 +521,7 @@ describe("nano-hooks usage", () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("Usage: nano-hooks");
+    expect(result.stdout).toContain("install (default)");
   });
 });
 

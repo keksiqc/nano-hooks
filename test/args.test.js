@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { COMMANDS, OPTIONS, parseArgs } from "../src/args.js";
-import { HELP } from "../src/help.js";
+import { COMMANDS, GLOBAL_OPTIONS, parseArgs } from "../src/args.js";
+import { formatHelp } from "../src/help.js";
 
 const parse = (...argv) => parseArgs(argv);
 
 describe("parseArgs", () => {
-  it("runs install when no command is given", () => {
-    expect(parse().command).toBe("install");
+  it("uses the supplied default when no command is given", () => {
+    const { command, options } = parseArgs(["--bail"], "staged");
+
+    expect(command.name).toBe("staged");
+    expect(options).toEqual({ bail: true });
   });
 
   it("takes options before and after the command", () => {
@@ -25,7 +28,7 @@ describe("parseArgs", () => {
   it("takes the hook name for run", () => {
     const { command, args, options } = parse("run", "-c", "a.json", "commit-msg");
 
-    expect(command).toBe("run");
+    expect(command.name).toBe("run");
     expect(args).toEqual(["commit-msg"]);
     expect(options).toEqual({ config: "a.json" });
   });
@@ -62,7 +65,14 @@ describe("parseArgs", () => {
 
 describe("the help text", () => {
   it("names every command and every option", () => {
-    for (const command of COMMANDS) expect(HELP).toContain(`  ${command}`);
-    for (const option of Object.keys(OPTIONS)) expect(HELP).toContain(`--${option}`);
+    const help = formatHelp("uninstall");
+
+    expect(help).toContain("uninstall (default)");
+    for (const { name, positionals = [], options = {} } of COMMANDS) {
+      const usage = [name, ...positionals.map((argument) => `<${argument.name}>`)].join(" ");
+      expect(help).toContain(`  ${usage}`);
+      for (const option of Object.keys(options)) expect(help).toContain(`--${option}`);
+    }
+    for (const option of Object.keys(GLOBAL_OPTIONS)) expect(help).toContain(`--${option}`);
   });
 });

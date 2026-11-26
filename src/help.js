@@ -1,23 +1,33 @@
-/** The help text. Keep the commands in step with `args.js`. */
-export const HELP = `Usage: nano-hooks [command] [options]
+import { COMMANDS, GLOBAL_OPTIONS } from "./args.js";
 
-Commands:
-  install (default)  Write the configured git hooks
-  uninstall          Remove the hooks nano-hooks manages
-  staged             Run the commands of the "staged" key
-  run <hook>         Run one configured git hook now
+function formatRows(rows) {
+  const width = Math.max(...rows.map(([label]) => label.length));
+  return rows.map(([label, description]) => `  ${label.padEnd(width)}  ${description}`).join("\n");
+}
 
-Options:
-  -c, --config <path>  Path to a nano-hooks configuration file
-  -v, --version        Show the version
-  -h, --help           Show this help
+function formatOptions(options) {
+  const rows = Object.entries(options).map(([flag, { short, valueName, description }]) => [
+    `${short ? `-${short}, ` : ""}--${flag}${valueName ? ` <${valueName}>` : ""}`,
+    description,
+  ]);
+  return formatRows(rows);
+}
 
-Options for staged:
-  --allow-empty  Allow empty commits
-  --bail         Stop after the first failing command
-  --no-parallel  Run the patterns one after the other
-  --no-restage   Leave the changes of the commands out of the commit
+export function formatHelp(defaultCommand) {
+  const commandRows = COMMANDS.map(({ name, description, positionals = [] }) => {
+    const usage = [name, ...positionals.map((argument) => `<${argument.name}>`)].join(" ");
+    return [name === defaultCommand ? `${usage} (default)` : usage, description];
+  });
 
-  These options can also be set in the "options" section of the configuration.
-  A command line option wins over the configuration.
-`;
+  const sections = [
+    "Usage: nano-hooks [command] [options]",
+    `Commands:\n${formatRows(commandRows)}`,
+    `Options:\n${formatOptions(GLOBAL_OPTIONS)}`,
+  ];
+  for (const { name, options, optionsHelp } of COMMANDS) {
+    if (!options) continue;
+    sections.push(`Options for ${name}:\n${formatOptions(options)}`);
+    if (optionsHelp) sections.push(optionsHelp.map((line) => `  ${line}`).join("\n"));
+  }
+  return `${sections.join("\n\n")}\n`;
+}

@@ -1,73 +1,17 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
-import { relative } from "node:path";
 
 import { parseArgs } from "./args.js";
-import { install } from "./commands/install.js";
-import { runHook } from "./commands/run.js";
-import { runConfiguredStaged } from "./commands/staged.js";
-import { uninstall } from "./commands/uninstall.js";
-import { NotGitRepositoryError } from "./git.js";
-import { HELP } from "./help.js";
+import { installCommand } from "./commands/install.js";
+import { formatHelp } from "./help.js";
 import { log } from "./log.js";
 
-async function installHooks(config) {
-  if (process.env.NANO_HOOKS === "0") {
-    log.info("Skipped install because NANO_HOOKS=0.");
-    return 0;
-  }
-
-  let result;
-  try {
-    result = await install({ config });
-  } catch (error) {
-    if (!(error instanceof NotGitRepositoryError)) throw error;
-    log.warn(`${error.message}. Hooks were not installed.`);
-    return 0;
-  }
-  const { installed, removed, skipped, hooksDir, external, foreignHooksDir } = result;
-  if (external && !foreignHooksDir) {
-    log.info(
-      `core.hooksPath is set: hooks go to ${relative(process.cwd(), hooksDir)} instead of .git/hooks.`,
-    );
-  }
-  if (foreignHooksDir) {
-    log.warn(
-      `core.hooksPath points outside .git: ${hooksDir}. Another hooks manager, such as husky, can use the same directory. To write hooks to .git/hooks again, run: git config --unset core.hooksPath`,
-    );
-  }
-  for (const name of installed) log.success(`Installed ${name}`);
-  for (const name of removed) log.success(`Removed ${name} (no longer configured)`);
-  for (const name of skipped) {
-    log.warn(`Skipped ${name} because nano-hooks did not write the existing hook`);
-  }
-  if (installed.length === 0 && removed.length === 0 && skipped.length === 0) {
-    log.info("No hooks to install.");
-  }
-  return 0;
-}
-
-const handlers = {
-  install: ({ options }) => installHooks(options.config),
-
-  async uninstall() {
-    const { removed } = await uninstall();
-    for (const name of removed) log.success(`Removed ${name}`);
-    if (removed.length === 0) log.info("No nano-hooks hooks found.");
-    return 0;
-  },
-
-  staged: ({ options: { config: file, ...flags } }) => runConfiguredStaged({ file, flags }),
-
-  run({ options, args: [hook] }) {
-    if (!hook) throw new Error('Command "run" needs a hook name.');
-    return runHook(hook, { config: options.config });
-  },
-};
+const DEFAULT_COMMAND = installCommand.name;
+const HELP = formatHelp(DEFAULT_COMMAND);
 
 async function main(argv) {
   try {
-    const { action, command, name, options, args } = parseArgs(argv);
+    const { action, command, name, options, args } = parseArgs(argv, DEFAULT_COMMAND);
     if (action === "help") {
       process.stdout.write(HELP);
       return 0;
@@ -82,7 +26,7 @@ async function main(argv) {
       process.stderr.write(`\n${HELP}`);
       return 1;
     }
-    return await handlers[command]({ options, args });
+    return await command.run({ options, args });
   } catch (error) {
     log.error(error.message);
     return 1;

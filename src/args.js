@@ -1,30 +1,31 @@
 import { parseArgs as parseNodeArgs } from "node:util";
 
-/** The command names, in the order the help lists them. */
-export const COMMANDS = ["install", "uninstall", "staged", "run"];
+import { installCommand } from "./commands/install.js";
+import { runCommand } from "./commands/run.js";
+import { stagedCommand } from "./commands/staged.js";
+import { uninstallCommand } from "./commands/uninstall.js";
 
-const DEFAULT_COMMAND = "install";
+export const COMMANDS = [installCommand, uninstallCommand, stagedCommand, runCommand];
 
-const STAGED_FLAGS = {
-  "allow-empty": { allowEmpty: true },
-  bail: { bail: true },
-  "no-parallel": { parallel: false },
-  "no-restage": { restage: false },
+export const GLOBAL_OPTIONS = {
+  config: {
+    type: "string",
+    short: "c",
+    valueName: "path",
+    description: "Path to a nano-hooks configuration file",
+  },
+  version: { type: "boolean", short: "v", description: "Show the version" },
+  help: { type: "boolean", short: "h", description: "Show this help" },
 };
 
-export const OPTIONS = {
-  config: { type: "string", short: "c" },
-  help: { type: "boolean", short: "h" },
-  version: { type: "boolean", short: "v" },
-  ...Object.fromEntries(Object.keys(STAGED_FLAGS).map((flag) => [flag, { type: "boolean" }])),
-};
+const OPTIONS = Object.assign({}, GLOBAL_OPTIONS, ...COMMANDS.map(({ options }) => options));
 
 /**
  * Options may appear before or after the command. The result has `action` ("help" or
  * "version") instead of `command` for those options, and `name` for an unknown command.
  * A bad option makes `util.parseArgs` throw.
  */
-export function parseArgs(argv) {
+export function parseArgs(argv, defaultCommand) {
   const { values, positionals } = parseNodeArgs({
     args: argv,
     options: OPTIONS,
@@ -33,17 +34,29 @@ export function parseArgs(argv) {
   if (values.version) return { action: "version" };
   if (values.help) return { action: "help" };
 
-  const [command = DEFAULT_COMMAND, ...args] = positionals;
-  if (!COMMANDS.includes(command)) return { name: command, options: {}, args };
+  const [name = defaultCommand, ...args] = positionals;
+  const command = COMMANDS.find((candidate) => candidate.name === name);
+  if (!command) return { name, options: {}, args };
 
-  const maxArgs = command === "run" ? 1 : 0;
+  const parameters = command.positionals ?? [];
+  const maxArgs = parameters.length;
   if (args.length > maxArgs) throw new Error(`Unexpected argument "${args[maxArgs]}".`);
 
   const options = values.config ? { config: values.config } : {};
-  for (const [flag, settings] of Object.entries(STAGED_FLAGS)) {
-    if (!values[flag]) continue;
-    if (command !== "staged") throw new Error(`Option "--${flag}" only applies to "staged".`);
-    Object.assign(options, settings);
+  for (const owner of COMMANDS) {
+    for (const [flag, { setting = flag, value = values[flag] }] of Object.entries(
+      owner.options ?? {},
+    )) {
+      if (values[flag] === undefined) continue;
+      if (command !== owner) {
+        throw new Error(`Option "--${flag}" only applies to "${owner.name}".`);
+      }
+      options[setting] = value;
+    }
   }
+
+  const missing = parameters.find((_, index) => !args[index]);
+  if (missing) throw new Error(`Command "${name}" needs ${missing.description}.`);
+
   return { command, options, args };
 }

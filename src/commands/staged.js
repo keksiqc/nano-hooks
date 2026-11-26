@@ -5,6 +5,40 @@ import { createRenderer, log } from "../log.js";
 import { realPath } from "../paths.js";
 import { CommandError, createCommandGroups, runCommandGroups } from "../tasks.js";
 
+const ALLOW_EMPTY_FLAG = "allow-empty";
+
+export const stagedCommand = {
+  name: "staged",
+  description: 'Run the commands of the "staged" key',
+  options: {
+    [ALLOW_EMPTY_FLAG]: {
+      type: "boolean",
+      setting: "allowEmpty",
+      description: "Allow empty commits",
+    },
+    bail: { type: "boolean", description: "Stop after the first failing command" },
+    "no-parallel": {
+      type: "boolean",
+      setting: "parallel",
+      value: false,
+      description: "Run the patterns one after the other",
+    },
+    "no-restage": {
+      type: "boolean",
+      setting: "restage",
+      value: false,
+      description: "Leave the changes of the commands out of the commit",
+    },
+  },
+  optionsHelp: [
+    'These options can also be set in the "options" section of the configuration.',
+    "A command line option wins over the configuration.",
+  ],
+  run({ options: { config: file, ...flags } }) {
+    return runConfiguredStaged({ file, flags });
+  },
+};
+
 /**
  * Run the commands of `config` on the matching staged `files`, inside a backup of the index and
  * the unstaged changes. Returns false when no file matches a pattern.
@@ -43,7 +77,7 @@ async function runStagedTasks({ config, files, gitPaths, cwd, stream, quiet, set
 
 function advise(error) {
   return error instanceof EmptyCommitError
-    ? new Error(`${error.message} Use --allow-empty to allow it.`, { cause: error })
+    ? new Error(`${error.message} Use --${ALLOW_EMPTY_FLAG} to allow it.`, { cause: error })
     : error;
 }
 

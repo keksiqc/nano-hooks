@@ -5,6 +5,15 @@ import { VALID_HOOKS, loadConfig } from "../config.js";
 import { envWithBin } from "../exec.js";
 import { commandScript } from "../hooks.js";
 
+export const runCommand = {
+  name: "run",
+  description: "Run one configured git hook now",
+  positionals: [{ name: "hook", description: "a hook name" }],
+  run({ options, args: [hook] }) {
+    return runHook(hook, { config: options.config });
+  },
+};
+
 /**
  * Run one hook now, as git would: its commands in a `sh` shell. A failing command stops the
  * hook. Unlike an installed hook, it ignores `SKIP_NANO_HOOKS`. Returns the exit code.
