@@ -14,7 +14,7 @@ nano-hooks is a small Git hooks manager with a runner for staged files. Its CLI 
 
 ## Quick start
 
-nano-hooks requires Node 22, or Node 24 and later.
+nano-hooks requires Node 22, 24 or 26 and later.
 
 1. Install the package:
 
