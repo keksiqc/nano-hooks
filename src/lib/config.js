@@ -1,29 +1,16 @@
 import { access, readFile } from "node:fs/promises";
 import { basename, extname, join, resolve } from "node:path";
 
+import {
+  CONFIG_SHAPE,
+  MIN_COMMANDS,
+  STAGED_OPTIONS,
+  VALID_HOOKS,
+  isNonBlankString,
+} from "./config-shape.js";
 import { globToRegex } from "./glob.js";
 
-/** Hook names from githooks(5). */
-export const VALID_HOOKS = [
-  "applypatch-msg",
-  "pre-applypatch",
-  "post-applypatch",
-  "pre-commit",
-  "pre-merge-commit",
-  "prepare-commit-msg",
-  "commit-msg",
-  "post-commit",
-  "pre-rebase",
-  "post-checkout",
-  "post-merge",
-  "pre-push",
-  "reference-transaction",
-  "pre-auto-gc",
-  "post-rewrite",
-  "sendemail-validate",
-  "fsmonitor-watchman",
-  "post-index-change",
-];
+export { VALID_HOOKS };
 
 export function formatValidHooks() {
   return `Valid hooks: ${VALID_HOOKS.join(", ")}`;
@@ -43,12 +30,8 @@ const CONFIG_FILES = [
   ".config/nano-hooks.json",
 ];
 
-export const STAGED_DEFAULTS = {
-  allowEmpty: false,
-  bail: false,
-  parallel: true,
-  restage: true,
-};
+const { properties: OPTION_PROPERTIES } = CONFIG_SHAPE.properties.options;
+const STAGED_SHAPE = CONFIG_SHAPE.properties.staged;
 
 /**
  * The value of every setting. Each layer, from the first to the last, overrides the one before
@@ -56,7 +39,7 @@ export const STAGED_DEFAULTS = {
  */
 export function resolveSettings(...layers) {
   const settings = {};
-  for (const [name, defaultValue] of Object.entries(STAGED_DEFAULTS)) {
+  for (const [name, { default: defaultValue }] of Object.entries(STAGED_OPTIONS)) {
     settings[name] =
       layers.findLast((layer) => layer?.[name] !== undefined)?.[name] ?? defaultValue;
   }
@@ -67,8 +50,6 @@ export function resolveSettings(...layers) {
 export const toCommandList = (command) => (Array.isArray(command) ? command : [command]);
 
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
-export const NON_BLANK = /\S/u;
-const nonBlankString = (value) => typeof value === "string" && NON_BLANK.test(value);
 
 async function readConfigFile(absolutePath, displayName, { required = false } = {}) {
   const isJson = extname(absolutePath).toLowerCase() === ".json";
@@ -134,13 +115,13 @@ function validateHookName(name, path, report) {
 }
 
 function validateCommands(value, path, report) {
-  if (nonBlankString(value)) return;
-  if (!Array.isArray(value) || value.length === 0) {
+  if (isNonBlankString(value)) return;
+  if (!Array.isArray(value) || value.length < MIN_COMMANDS) {
     report.problems.push(`${path}: must be a command or a non-empty list of commands`);
     return;
   }
   for (const [index, command] of value.entries()) {
-    if (!nonBlankString(command)) {
+    if (!isNonBlankString(command)) {
       report.problems.push(`${path}[${index}]: must be a non-blank command string`);
     }
   }
@@ -148,13 +129,13 @@ function validateCommands(value, path, report) {
 
 function validateStaged(staged, report) {
   const entries = Object.entries(staged);
-  if (entries.length === 0) {
+  if (entries.length < STAGED_SHAPE.minProperties) {
     report.problems.push("staged: must have at least one pattern");
   }
   for (const [pattern, task] of entries) {
     const path = `staged[${JSON.stringify(pattern)}]`;
     validateCommands(task, path, report);
-    if (pattern === "") {
+    if (pattern.length < STAGED_SHAPE.propertyNames.minLength) {
       report.problems.push(`${path}: glob pattern must not be empty`);
       continue;
     }
@@ -200,10 +181,10 @@ function validateOptions(options, report) {
   for (const [name, value] of Object.entries(options)) {
     if (name === "preserveUnused") {
       validatePreserveUnused(value, report);
-    } else if (!Object.hasOwn(STAGED_DEFAULTS, name)) {
-      const expected = [...Object.keys(STAGED_DEFAULTS), "preserveUnused"].join(", ");
+    } else if (!Object.hasOwn(OPTION_PROPERTIES, name)) {
+      const expected = Object.keys(OPTION_PROPERTIES).join(", ");
       report.problems.push(`options.${name}: unknown option (expected ${expected})`);
-    } else if (typeof value !== "boolean") {
+    } else if (typeof value !== OPTION_PROPERTIES[name].type) {
       report.problems.push(`options.${name}: must be true or false`);
     }
   }
@@ -221,20 +202,21 @@ function validateConfig(raw) {
 
   const report = { problems: [], unknownHook: false };
   for (const [key, value] of Object.entries(raw)) {
-    if (Object.hasOwn(SECTION_VALIDATORS, key)) {
-      if (isObject(value)) {
-        SECTION_VALIDATORS[key](value, report);
+    if (!Object.hasOwn(CONFIG_SHAPE.properties, key)) {
+      if (VALID_HOOKS.includes(key)) {
+        report.problems.push(`${key}: move this hook to "hooks.${key}"`);
       } else {
-        const expected =
-          key === "staged" ? "an object mapping glob patterns to commands" : "an object";
-        report.problems.push(`${key}: must be ${expected}`);
+        const expected = `${Object.keys(SECTION_VALIDATORS).join(", ")} or $schema`;
+        report.problems.push(`${key}: unknown key (expected ${expected})`);
       }
     } else if (key === "$schema") {
-      if (!nonBlankString(value)) report.problems.push("$schema: must be a non-blank string");
-    } else if (VALID_HOOKS.includes(key)) {
-      report.problems.push(`${key}: move this hook to "hooks.${key}"`);
+      if (!isNonBlankString(value)) report.problems.push("$schema: must be a non-blank string");
+    } else if (isObject(value)) {
+      SECTION_VALIDATORS[key](value, report);
     } else {
-      report.problems.push(`${key}: unknown key (expected options, hooks, staged or $schema)`);
+      const expected =
+        key === "staged" ? "an object mapping glob patterns to commands" : "an object";
+      report.problems.push(`${key}: must be ${expected}`);
     }
   }
 
