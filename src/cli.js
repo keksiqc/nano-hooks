@@ -57,7 +57,7 @@ const handlers = {
     return 0;
   },
 
-  staged: ({ options }) => runConfiguredStaged({ file: options.config, flags: options }),
+  staged: ({ options: { config: file, ...flags } }) => runConfiguredStaged({ file, flags }),
 
   run({ options, args: [hook] }) {
     if (!hook) throw new Error('Command "run" needs a hook name.');

@@ -1,19 +1,22 @@
 import { parseArgs as parseNodeArgs } from "node:util";
 
-import { STAGED_SETTINGS } from "./settings.js";
-
 /** The command names, in the order the help lists them. */
 export const COMMANDS = ["install", "uninstall", "staged", "run"];
 
 const DEFAULT_COMMAND = "install";
 
-const OPTIONS = {
+const STAGED_FLAGS = {
+  "allow-empty": { allowEmpty: true },
+  bail: { bail: true },
+  "no-parallel": { parallel: false },
+  "no-restage": { restage: false },
+};
+
+export const OPTIONS = {
   config: { type: "string", short: "c" },
   help: { type: "boolean", short: "h" },
   version: { type: "boolean", short: "v" },
-  ...Object.fromEntries(
-    Object.values(STAGED_SETTINGS).map(({ flag }) => [flag.slice(2), { type: "boolean" }]),
-  ),
+  ...Object.fromEntries(Object.keys(STAGED_FLAGS).map((flag) => [flag, { type: "boolean" }])),
 };
 
 /**
@@ -37,10 +40,10 @@ export function parseArgs(argv) {
   if (args.length > maxArgs) throw new Error(`Unexpected argument "${args[maxArgs]}".`);
 
   const options = values.config ? { config: values.config } : {};
-  for (const [key, { flag, default: defaultValue }] of Object.entries(STAGED_SETTINGS)) {
-    if (!values[flag.slice(2)]) continue;
-    if (command !== "staged") throw new Error(`Option "${flag}" only applies to "staged".`);
-    options[key] = !defaultValue;
+  for (const [flag, settings] of Object.entries(STAGED_FLAGS)) {
+    if (!values[flag]) continue;
+    if (command !== "staged") throw new Error(`Option "--${flag}" only applies to "staged".`);
+    Object.assign(options, settings);
   }
   return { command, options, args };
 }

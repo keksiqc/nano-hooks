@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { COMMANDS, parseArgs } from "../src/args.js";
+import { COMMANDS, OPTIONS, parseArgs } from "../src/args.js";
 import { HELP } from "../src/help.js";
-import { STAGED_SETTINGS } from "../src/settings.js";
 
 const parse = (...argv) => parseArgs(argv);
 
@@ -64,13 +63,6 @@ describe("parseArgs", () => {
 describe("the help text", () => {
   it("names every command and every option", () => {
     for (const command of COMMANDS) expect(HELP).toContain(`  ${command}`);
-    for (const option of [
-      ...Object.values(STAGED_SETTINGS).map(({ flag }) => flag),
-      "--config",
-      "--version",
-      "--help",
-    ]) {
-      expect(HELP).toContain(option);
-    }
+    for (const option of Object.keys(OPTIONS)) expect(HELP).toContain(`--${option}`);
   });
 });

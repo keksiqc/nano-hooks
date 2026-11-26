@@ -1,9 +1,8 @@
 import { EmptyCommitError, runWithBackup } from "../backup.js";
-import { loadConfig } from "../config.js";
+import { loadConfig, resolveSettings } from "../config.js";
 import { createGit } from "../git.js";
 import { createRenderer, log } from "../log.js";
 import { realPath } from "../paths.js";
-import { resolveSettings } from "../settings.js";
 import { CommandError, createCommandGroups, runCommandGroups } from "../tasks.js";
 
 /**

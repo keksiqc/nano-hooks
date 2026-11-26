@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { VALID_HOOKS, loadConfig } from "../src/config.js";
+import { VALID_HOOKS, loadConfig, resolveSettings } from "../src/config.js";
 import { testRepo as repo } from "./helpers.js";
 
 const json = (value) => JSON.stringify(value);
@@ -31,7 +31,16 @@ describe("loadConfig", () => {
     });
   });
 
-  it.each(["nano-hooks.config.json", ".nano-hooks.json"])("reads %s", async (name) => {
+  it.each([
+    ".nanohooks.json",
+    ".nano-hooks.json",
+    ".nano-hooks.config.json",
+    "nanohooks.json",
+    "nano-hooks.json",
+    "nano-hooks.config.json",
+    ".config/nanohooks.json",
+    ".config/nano-hooks.json",
+  ])("reads %s", async (name) => {
     const r = repo({ [name]: json({ hooks: { "commit-msg": "a" } }) });
 
     expect((await loadConfig(r.dir)).hooks).toEqual({ "commit-msg": "a" });
@@ -49,7 +58,7 @@ describe("loadConfig", () => {
   it.each([
     ["package.json", "nano-hooks.config.json"],
     ["package.json", ".nano-hooks.json"],
-    ["nano-hooks.config.json", ".nano-hooks.json"],
+    [".nano-hooks.json", "nano-hooks.config.json"],
   ])("rejects a project with both %s and %s", async (first, second) => {
     const config = { hooks: { "pre-commit": "x" } };
     const contents = {
@@ -67,7 +76,11 @@ describe("loadConfig", () => {
   it("returns empty defaults when no config exists", async () => {
     const r = repo({ "package.json": json({ name: "x" }) });
 
-    expect(await loadConfig(r.dir)).toEqual({ hooks: {}, preserveUnused: false, options: {} });
+    expect(await loadConfig(r.dir)).toStrictEqual({
+      hooks: {},
+      preserveUnused: false,
+      options: {},
+    });
   });
 
   it("accepts a relative schema path without resolving it", async () => {
@@ -123,12 +136,14 @@ describe("loadConfig", () => {
   it("reports problems in the options section", async () => {
     const message = await problems({
       ".nano-hooks.json": json({
-        options: { parallel: "no", nope: 1, preserveUnused: ["pre-comit"] },
+        options: { parallel: "no", constructor: true, preserveUnused: ["pre-comit"] },
       }),
     });
 
     expect(message).toContain("options.parallel: must be true or false");
-    expect(message).toContain("options.nope: unknown option (expected allowEmpty, bail,");
+    expect(message).toContain(
+      "options.constructor: unknown option (expected allowEmpty, bail, parallel, restage, preserveUnused)",
+    );
     expect(message).toContain('options.preserveUnused[0]: unknown git hook "pre-comit"');
     expect(message).toContain("Valid hooks:");
   });
@@ -285,6 +300,20 @@ describe("invalid configuration", () => {
     );
   });
 
+  it("rejects a null nano-hooks key in package.json", async () => {
+    const message = await problems({ "package.json": json({ "nano-hooks": null }) });
+
+    expect(message).toContain("Invalid nano-hooks configuration in package.json:");
+    expect(message).toContain("configuration must be an object");
+  });
+
+  it("reports top-level keys that match Object.prototype properties as unknown", async () => {
+    const message = await problems({ ".nano-hooks.json": '{"__proto__":{},"constructor":{}}' });
+
+    expect(message).toContain("__proto__: unknown key");
+    expect(message).toContain("constructor: unknown key");
+  });
+
   it("rejects an invalid schema reference", async () => {
     const message = await problems({ ".nano-hooks.json": json({ $schema: "  " }) });
 
@@ -315,6 +344,30 @@ describe("JSON Schema", () => {
   });
 });
 
+describe("resolveSettings", () => {
+  it("starts from the defaults", () => {
+    expect(resolveSettings()).toEqual({
+      allowEmpty: false,
+      bail: false,
+      parallel: true,
+      restage: true,
+    });
+  });
+
+  it("lets a later layer win and skips settings that are undefined", () => {
+    const settings = resolveSettings(
+      { bail: true, parallel: false },
+      { parallel: undefined, restage: false },
+    );
+
+    expect(settings).toEqual({ allowEmpty: false, bail: true, parallel: false, restage: false });
+  });
+
+  it("ignores keys that are not settings", () => {
+    expect(resolveSettings({ preserveUnused: true })).not.toHaveProperty("preserveUnused");
+  });
+});
+
 describe("loadConfig with an explicit file", () => {
   it("loads it instead of discovering one, relative to cwd", async () => {
     const r = repo({
@@ -337,11 +390,16 @@ describe("loadConfig with an explicit file", () => {
     });
   });
 
-  it("rejects a file that does not exist", async () => {
-    await expect(loadConfig(repo({}).dir, { file: "nope.json" })).rejects.toThrow(
-      "Configuration file nope.json not found.",
-    );
-  });
+  it.each(["nope.json", "nope.js", "package.json/config.json"])(
+    "reports %s as a missing file",
+    async (file) => {
+      const r = repo({ "package.json": "{}" });
+
+      await expect(loadConfig(r.dir, { file })).rejects.toThrow(
+        `Configuration file ${file} not found.`,
+      );
+    },
+  );
 
   it.each(["config.js", "config.mjs", "config.yaml"])("rejects %s", async (name) => {
     const r = repo({ [name]: "x" });

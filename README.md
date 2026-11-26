@@ -44,9 +44,16 @@ nano-hooks requires Node 22, or Node 24 and later.
 
 ## Configuration
 
-nano-hooks reads its configuration from one of these places, in this order: the `nano-hooks` key in `package.json`, the file `nano-hooks.config.json`, and the file `.nano-hooks.json`. All of them hold plain JSON. nano-hooks never runs your code to read the configuration. It looks only in the directory where you run it, unless you set `--config`. If more than one of these places exists, nano-hooks stops with an error that names them. Keep one.
+nano-hooks looks for configuration in these locations relative to the directory where you run it.
 
-The top-level configuration keys are `options`, `hooks`, and `staged`. The `hooks` key maps each Git hook name to a command or a list of commands.
+- The `nano-hooks` key in `package.json`
+- `.nanohooks.json`, `.nano-hooks.json`, or `.nano-hooks.config.json`
+- `nanohooks.json`, `nano-hooks.json`, or `nano-hooks.config.json`
+- `.config/nanohooks.json` or `.config/nano-hooks.json`
+
+All of them hold plain JSON. nano-hooks never runs your code to read the configuration. If more than one location provides a configuration, nano-hooks stops with an error that names them. Use `--config` to select a specific file.
+
+Include the sections you use. `hooks` maps Git hook names to commands, `staged` defines tasks for `nano-hooks staged`, and `options` overrides defaults.
 
 - A command, such as `"commit-msg": "commitlint --edit \"$1\""`.
 - A list of commands, such as `"pre-push": ["npm run lint", "npm test"]`. The commands run one after the other, and the first command that fails stops the list.
