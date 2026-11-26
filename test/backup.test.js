@@ -4,8 +4,8 @@ import { join, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { runWithBackup } from "../src/backup.js";
-import { createGit } from "../src/git.js";
+import { runWithBackup } from "../src/lib/backup.js";
+import { createGit } from "../src/lib/git.js";
 import { FMT, nanoWith, testRepo } from "./helpers.js";
 
 const repo = (files) => testRepo({ "fmt.js": FMT, ...files });

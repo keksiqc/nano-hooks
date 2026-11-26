@@ -4,8 +4,13 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import { describe, expect, it } from "vitest";
 
-import { createRenderer } from "../src/log.js";
-import { CommandError, chunkFiles, createCommandGroups, runCommandGroups } from "../src/tasks.js";
+import { createRenderer } from "../src/lib/log.js";
+import {
+  CommandError,
+  chunkFiles,
+  createCommandGroups,
+  runCommandGroups,
+} from "../src/lib/tasks.js";
 import { testTempDir } from "./helpers.js";
 
 describe("chunkFiles", () => {

@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
-import { NON_BLANK, STAGED_DEFAULTS, VALID_HOOKS } from "../src/config.js";
+import { NON_BLANK, STAGED_DEFAULTS, VALID_HOOKS } from "../src/lib/config.js";
 
 const command = { type: "string", pattern: NON_BLANK.source };
 const commandList = { $ref: "#/$defs/commandList" };

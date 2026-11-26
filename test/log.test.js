@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createRenderer, log } from "../src/log.js";
+import { createRenderer, log } from "../src/lib/log.js";
 
 const HIDE_CURSOR = "\x1B[?25l";
 const SHOW_CURSOR = "\x1B[?25h";

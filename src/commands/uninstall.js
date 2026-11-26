@@ -1,8 +1,8 @@
 import { resolve } from "node:path";
 
-import { createGit } from "../git.js";
-import { managedHooks, removeHooks } from "../hooks.js";
-import { log } from "../log.js";
+import { createGit } from "../lib/git.js";
+import { managedHooks, removeHooks } from "../lib/hooks.js";
+import { log } from "../lib/log.js";
 
 export function registerUninstallCommand(cli) {
   return cli.command("uninstall", "Remove the hooks nano-hooks manages").action(async () => {

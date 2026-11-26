@@ -1,9 +1,9 @@
-import { EmptyCommitError, runWithBackup } from "../backup.js";
-import { loadConfig, resolveSettings } from "../config.js";
-import { createGit } from "../git.js";
-import { createRenderer, log } from "../log.js";
-import { realPath } from "../paths.js";
-import { CommandError, createCommandGroups, runCommandGroups } from "../tasks.js";
+import { EmptyCommitError, runWithBackup } from "../lib/backup.js";
+import { loadConfig, resolveSettings } from "../lib/config.js";
+import { createGit } from "../lib/git.js";
+import { createRenderer, log } from "../lib/log.js";
+import { realPath } from "../lib/paths.js";
+import { CommandError, createCommandGroups, runCommandGroups } from "../lib/tasks.js";
 
 const ALLOW_EMPTY_FLAG = "--allow-empty";
 

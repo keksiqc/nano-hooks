@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createMatcher } from "../src/glob.js";
+import { createMatcher } from "../src/lib/glob.js";
 
 const matches = (glob, file) => createMatcher(glob)(file);
 

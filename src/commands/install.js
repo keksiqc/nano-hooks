@@ -1,8 +1,8 @@
 import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
-import { loadConfig } from "../config.js";
-import { NotGitRepositoryError, createGit } from "../git.js";
+import { loadConfig } from "../lib/config.js";
+import { NotGitRepositoryError, createGit } from "../lib/git.js";
 import {
   MARKER,
   commandScript,
@@ -10,9 +10,9 @@ import {
   isManaged,
   managedHooks,
   removeHooks,
-} from "../hooks.js";
-import { log } from "../log.js";
-import { realPath, toPosix } from "../paths.js";
+} from "../lib/hooks.js";
+import { log } from "../lib/log.js";
+import { realPath, toPosix } from "../lib/paths.js";
 
 export function registerInstallCommand(cli) {
   return cli

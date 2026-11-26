@@ -14,7 +14,6 @@
   arguments, generates help, and dispatches actions. The global and command help together
   MUST list every registered command and option. A test checks this.
 - Commands expose plain functions for the library. Command handlers and runners MUST use the
-  `log` helper for terminal output. Code that several commands share, such as
-  `src/hooks.js`, `src/git.js` and `src/config.js`, stays outside `src/commands/`. `src/index.js`
+  `log` helper for terminal output. Shared command code lives in `src/lib/`. `src/index.js`
   re-exports the public functions.
 - Keep the library entry `src/index.js` independent of `src/cli.js` and CAC.

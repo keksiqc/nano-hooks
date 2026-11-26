@@ -7,7 +7,7 @@ import { registerInstallCommand } from "./commands/install.js";
 import { registerRunCommand } from "./commands/run.js";
 import { registerStagedCommand } from "./commands/staged.js";
 import { registerUninstallCommand } from "./commands/uninstall.js";
-import { log } from "./log.js";
+import { log } from "./lib/log.js";
 
 const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 const cli = cac("nano-hooks")

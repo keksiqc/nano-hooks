@@ -1,9 +1,9 @@
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 
-import { VALID_HOOKS, formatValidHooks, loadConfig } from "../config.js";
-import { envWithBin } from "../exec.js";
-import { commandScript } from "../hooks.js";
+import { VALID_HOOKS, formatValidHooks, loadConfig } from "../lib/config.js";
+import { envWithBin } from "../lib/exec.js";
+import { commandScript } from "../lib/hooks.js";
 
 export function registerRunCommand(cli) {
   return cli

@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { createGit } from "../src/git.js";
+import { createGit } from "../src/lib/git.js";
 import { testRepo } from "./helpers.js";
 
 describe("snapshotIndex", () => {

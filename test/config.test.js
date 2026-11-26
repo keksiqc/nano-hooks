@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { VALID_HOOKS, loadConfig, resolveSettings } from "../src/config.js";
+import { VALID_HOOKS, loadConfig, resolveSettings } from "../src/lib/config.js";
 import { testRepo as repo } from "./helpers.js";
 
 const json = (value) => JSON.stringify(value);
