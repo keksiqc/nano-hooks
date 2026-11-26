@@ -310,10 +310,15 @@ describe("nano-hooks run", () => {
     expect(nano(r, "run", "pre-push").status).toBe(3);
   });
 
-  it("runs without the hook being installed and ignores SKIP_NANO_HOOKS", () => {
+  it("runs without the hook being installed and ignores the hook skip variables", () => {
     const r = repo({ ".nano-hooks.json": hooks({ "pre-push": "echo ran" }) });
 
-    const result = nanoWith(r, { env: { SKIP_NANO_HOOKS: "1" } }, "run", "pre-push");
+    const result = nanoWith(
+      r,
+      { env: { SKIP_NANO_HOOKS: "1", NANO_HOOKS: "0" } },
+      "run",
+      "pre-push",
+    );
 
     expect(result.stdout).toBe("ran\n");
   });

@@ -1,14 +1,19 @@
-import { existsSync, readFileSync, readdirSync, unlinkSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 
 import { toCommandList } from "./config.js";
 
-export const MARKER = "# nano-hooks: managed file, do not edit";
-
-/** Whether nano-hooks wrote the file. */
-export function isManaged(path) {
-  return readFileSync(path, "utf8").includes(MARKER);
-}
+const MARKER = "# nano-hooks: managed file, do not edit";
+const quote = (value) => `'${value.replaceAll("'", `'\\''`)}'`;
 
 /**
  * The shell code for a command or a list of commands. The first failure stops the list. Each
@@ -21,28 +26,69 @@ export function commandScript(command) {
     .join("\n");
 }
 
-/** Every entry of the hooks directory, and whether nano-hooks wrote it. */
-function scanHooksDir(hooksDir) {
-  if (!existsSync(hooksDir)) return [];
-  return readdirSync(hooksDir, { withFileTypes: true }).map((entry) => ({
-    name: entry.name,
-    managed: entry.isFile() && isManaged(join(hooksDir, entry.name)),
-  }));
+function hookScript(binDir, command) {
+  return [
+    "#!/bin/sh",
+    MARKER,
+    'if [ "${SKIP_NANO_HOOKS:-}" = "1" ] || [ "${NANO_HOOKS:-}" = "0" ]; then',
+    "  exit 0",
+    "fi",
+    `PATH="$PWD"/${quote(binDir)}:"$PATH"`,
+    commandScript(command),
+    "",
+  ].join("\n");
 }
 
-/** The names of the hook scripts that nano-hooks wrote. */
-export function managedHooks(hooksDir) {
-  return scanHooksDir(hooksDir)
-    .filter((entry) => entry.managed)
-    .map((entry) => entry.name);
+function hookOwnership(path, entry = lstatSync(path, { throwIfNoEntry: false })) {
+  if (!entry) return "missing";
+  return entry.isFile() && readFileSync(path, "utf8").includes(MARKER) ? "managed" : "foreign";
 }
 
-/** Whether the directory holds anything that nano-hooks did not write. */
-export function hasForeignFiles(hooksDir) {
-  return scanHooksDir(hooksDir).some((entry) => !entry.managed);
+function writeManagedHook(path, script) {
+  const ownership = hookOwnership(path);
+  if (ownership === "foreign") return false;
+
+  try {
+    writeFileSync(path, script, { mode: 0o755, flag: ownership === "missing" ? "wx" : "w" });
+  } catch (error) {
+    if (error.code === "EEXIST") return false;
+    throw error;
+  }
+  chmodSync(path, 0o755);
+  return true;
 }
 
-/** Delete the named hook scripts from the hooks directory. */
-export function removeHooks(hooksDir, names) {
-  for (const name of names) unlinkSync(join(hooksDir, name));
+/** Write the configured scripts and remove stale managed hooks unless preserved. */
+export function installManagedHooks({ hooksDir, hooks, binDir, preserveUnused }) {
+  mkdirSync(hooksDir, { recursive: true });
+  const installed = [];
+  const skipped = [];
+  for (const [name, command] of Object.entries(hooks)) {
+    const written = writeManagedHook(join(hooksDir, name), hookScript(binDir, command));
+    (written ? installed : skipped).push(name);
+  }
+
+  const keep = (name) =>
+    name in hooks ||
+    preserveUnused === true ||
+    (Array.isArray(preserveUnused) && preserveUnused.includes(name));
+  const { removed, hasForeignEntries } = removeManagedHooks(hooksDir, keep);
+  return { installed, removed, skipped, hasForeignEntries };
+}
+
+/** Remove managed scripts unless `keep` selects them, and report other entries. */
+export function removeManagedHooks(hooksDir, keep = () => false) {
+  const removed = [];
+  if (!existsSync(hooksDir)) return { removed, hasForeignEntries: false };
+
+  const entries = readdirSync(hooksDir, { withFileTypes: true }).map((entry) => {
+    const path = join(hooksDir, entry.name);
+    return { name: entry.name, path, ownership: hookOwnership(path, entry) };
+  });
+  for (const { name, path, ownership } of entries) {
+    if (ownership !== "managed" || keep(name)) continue;
+    unlinkSync(path);
+    removed.push(name);
+  }
+  return { removed, hasForeignEntries: entries.some(({ ownership }) => ownership === "foreign") };
 }

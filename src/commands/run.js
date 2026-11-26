@@ -12,8 +12,8 @@ export function registerRunCommand(cli) {
 }
 
 /**
- * Run one hook now, as git would: its commands in a `sh` shell. A failing command stops the
- * hook. Unlike an installed hook, it ignores `SKIP_NANO_HOOKS`. Returns the exit code.
+ * Run one hook now in a `sh` shell. A failing command stops the hook. An explicit run ignores
+ * `SKIP_NANO_HOOKS` and `NANO_HOOKS`. Returns the exit code.
  */
 export async function runHook(name, { cwd = process.cwd(), config } = {}) {
   if (!VALID_HOOKS.includes(name)) {

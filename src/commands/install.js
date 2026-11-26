@@ -1,16 +1,8 @@
-import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
 import { loadConfig } from "../lib/config.js";
 import { NotGitRepositoryError, createGit } from "../lib/git.js";
-import {
-  MARKER,
-  commandScript,
-  hasForeignFiles,
-  isManaged,
-  managedHooks,
-  removeHooks,
-} from "../lib/hooks.js";
+import { installManagedHooks } from "../lib/hooks.js";
 import { log } from "../lib/log.js";
 import { realPath, toPosix } from "../lib/paths.js";
 
@@ -56,8 +48,6 @@ export function registerInstallCommand(cli) {
     });
 }
 
-const quote = (value) => `'${value.replaceAll("'", `'\\''`)}'`;
-
 async function relativeRoot(projectRoot) {
   try {
     const top = await createGit(projectRoot).toplevel();
@@ -65,19 +55,6 @@ async function relativeRoot(projectRoot) {
   } catch {
     return "";
   }
-}
-
-function hookScript(binDir, script) {
-  return [
-    "#!/bin/sh",
-    MARKER,
-    'if [ "${SKIP_NANO_HOOKS:-}" = "1" ]; then',
-    "  exit 0",
-    "fi",
-    `PATH="$PWD"/${quote(binDir)}:"$PATH"`,
-    script,
-    "",
-  ].join("\n");
 }
 
 /**
@@ -91,27 +68,12 @@ export async function install({ cwd = process.cwd(), config } = {}) {
   const { dir: hooksDir, external } = await createGit(projectRoot).hooksInfo();
   const { hooks, preserveUnused } = await loadConfig(projectRoot, { file: config });
   const binDir = toPosix(join(await relativeRoot(projectRoot), "node_modules", ".bin"));
-
-  mkdirSync(hooksDir, { recursive: true });
-  const installed = [];
-  const skipped = [];
-  for (const [name, value] of Object.entries(hooks)) {
-    const path = join(hooksDir, name);
-    if (existsSync(path) && !isManaged(path)) {
-      skipped.push(name);
-      continue;
-    }
-    writeFileSync(path, hookScript(binDir, commandScript(value)), { mode: 0o755 });
-    chmodSync(path, 0o755);
-    installed.push(name);
-  }
-
-  const keep = (name) =>
-    name in hooks ||
-    preserveUnused === true ||
-    (Array.isArray(preserveUnused) && preserveUnused.includes(name));
-  const removed = managedHooks(hooksDir).filter((name) => !keep(name));
-  removeHooks(hooksDir, removed);
+  const { installed, removed, skipped, hasForeignEntries } = installManagedHooks({
+    hooksDir,
+    hooks,
+    binDir,
+    preserveUnused,
+  });
 
   return {
     installed,
@@ -119,6 +81,6 @@ export async function install({ cwd = process.cwd(), config } = {}) {
     skipped,
     hooksDir,
     external,
-    foreignHooksDir: external && hasForeignFiles(hooksDir),
+    foreignHooksDir: external && hasForeignEntries,
   };
 }

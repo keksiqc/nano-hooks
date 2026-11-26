@@ -1,5 +1,14 @@
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -146,11 +155,14 @@ describe("install", () => {
     expect(existsSync(join(r.dir, "ran"))).toBe(false);
   });
 
-  it("SKIP_NANO_HOOKS=1 skips the hook", async () => {
+  it.each([
+    ["SKIP_NANO_HOOKS", "1"],
+    ["NANO_HOOKS", "0"],
+  ])("%s=%s skips the installed hook", async (name, value) => {
     const r = repo({ "pre-commit": "touch ran" });
     await install({ cwd: r.dir });
 
-    commit(r, { SKIP_NANO_HOOKS: "1" });
+    commit(r, { [name]: value });
 
     expect(existsSync(join(r.dir, "ran"))).toBe(false);
   });
@@ -177,6 +189,36 @@ describe("install", () => {
     expect(result.skipped).toEqual(["pre-commit"]);
     expect(readFileSync(hookPath(r, "pre-commit"), "utf8")).toBe("#!/bin/sh\necho mine\n");
   });
+
+  it.skipIf(process.platform === "win32")(
+    "preserves symlinked hooks during install and uninstall",
+    async () => {
+      const r = repo({ "pre-push": "echo original" });
+      r.git("config", "core.hooksPath", ".githooks");
+      await install({ cwd: r.dir });
+
+      const target = join(r.dir, ".githooks/pre-push");
+      const linkedHook = join(r.dir, ".githooks/pre-commit");
+      const original = readFileSync(target, "utf8");
+      symlinkSync("pre-push", linkedHook);
+      configure(r, {
+        hooks: { "pre-commit": "echo configured" },
+        options: { preserveUnused: true },
+      });
+
+      const result = await install({ cwd: r.dir });
+
+      expect(result).toMatchObject({
+        installed: [],
+        skipped: ["pre-commit"],
+        foreignHooksDir: true,
+      });
+      expect(readFileSync(target, "utf8")).toBe(original);
+      expect(await uninstall({ cwd: r.dir })).toEqual({ removed: ["pre-push"] });
+      expect(lstatSync(linkedHook).isSymbolicLink()).toBe(true);
+      expect((await install({ cwd: r.dir })).skipped).toEqual(["pre-commit"]);
+    },
+  );
 
   it("removes managed hooks that are no longer configured", async () => {
     const r = repo({ "pre-commit": "echo a", "commit-msg": "echo b" });

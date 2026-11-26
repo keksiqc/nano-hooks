@@ -125,8 +125,8 @@ In a hook, every command runs in a `sh` shell, gets the hook arguments as `$1`, 
 ### Behavior
 
 - Hook scripts add `node_modules/.bin` to `PATH`, so locally installed tools work without a path.
-- To skip all hooks for one command, set `SKIP_NANO_HOOKS=1`. For example: `SKIP_NANO_HOOKS=1 git commit`.
-- To skip the installation, set `NANO_HOOKS=0`. For example: `NANO_HOOKS=0 pnpm install`. Use it in CI or in a container build where you do not need hooks.
+- To skip installed nano-hooks scripts for one command, set `SKIP_NANO_HOOKS=1` or `NANO_HOOKS=0`. For example, run `NANO_HOOKS=0 git commit`.
+- `NANO_HOOKS=0` also skips hook installation. Use `NANO_HOOKS=0 pnpm install` in CI or in a container build where you do not need hooks.
 - If the directory is not a git repository, `install` prints a warning and exits with code 0. A `prepare` script then does not fail an install that has no `.git` directory.
 - nano-hooks never overwrites or removes a hook that it did not write. The `install` command reports these hooks and continues.
 - If `core.hooksPath` points outside `.git`, `install` writes the hooks to that directory and prints where they go. If the directory also holds files that nano-hooks did not write, `install` prints a warning, because another tool such as husky can manage it. Make sure that only one tool manages the directory. To write the hooks to `.git/hooks` again, run `git config --unset core.hooksPath`. nano-hooks never changes `core.hooksPath` itself.
@@ -157,7 +157,7 @@ The `uninstall` command does not read the configuration. It accepts `--config` b
 
 The hook script holds your commands as you wrote them. The `install` command adds no `cd`, no flag and no variable. The script changes only when you run `install`, so run it again after you change a hook. The `staged` step reads the configuration each time it runs, so a change to `staged` or to `options` takes effect at once. The hook scripts contain no absolute paths, so they keep working when you move the repository. They find `nano-hooks` in `node_modules/.bin` of the project.
 
-The `run` command runs the commands of the named hook now. For example, `nano-hooks run pre-push` runs the `pre-push` command from your configuration. If the hook calls `nano-hooks staged`, the `staged` step runs as it does in a real commit. The commands go to a `sh` shell in the directory where you run the command. The exit code of the failing command becomes the exit code of `run`. The `run` command does not need the hook to be installed, and it ignores `SKIP_NANO_HOOKS`.
+The `run` command runs the commands of the named hook now. For example, `nano-hooks run pre-push` runs the `pre-push` command from your configuration. If the hook calls `nano-hooks staged`, the `staged` step runs as it does in a real commit. The commands go to a `sh` shell in the directory where you run the command. The exit code of the failing command becomes the exit code of `run`. The `run` command does not need the hook to be installed, and it ignores `SKIP_NANO_HOOKS` and `NANO_HOOKS`.
 
 The `staged` command runs the commands of the `staged` key. A hook calls it. You can also run it by hand to test your patterns.
 
