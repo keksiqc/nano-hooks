@@ -18,12 +18,13 @@ const patchPaths = (r) => ({
 
 async function work(r, execute, options = {}) {
   const git = createGit(r.dir);
-  const files = await git.stagedFiles();
+  const { working, changed, deleted } = await git.stagedFiles();
   const steps = [];
   const promise = runWithBackup({
-    rootPath: r.dir,
+    git,
     gitDir: join(r.dir, ".git"),
-    files,
+    hidePaths: [...changed, ...deleted],
+    restagePaths: working,
     execute: { tasks: [], run: execute },
     onStep: (step) => steps.push(step),
     ...options,

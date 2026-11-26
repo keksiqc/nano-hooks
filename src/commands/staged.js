@@ -1,9 +1,8 @@
-import { EmptyCommitError, runWithBackup } from "../lib/backup.js";
+import { EmptyCommitError } from "../lib/backup.js";
 import { loadConfig, resolveSettings } from "../lib/config.js";
-import { createGit } from "../lib/git.js";
-import { createRenderer, log } from "../lib/log.js";
-import { realPath } from "../lib/paths.js";
-import { CommandError, createCommandGroups, runCommandGroups } from "../lib/tasks.js";
+import { log } from "../lib/log.js";
+import { runStagedTasks } from "../lib/staged.js";
+import { CommandError } from "../lib/tasks.js";
 
 const ALLOW_EMPTY_FLAG = "--allow-empty";
 
@@ -16,42 +15,6 @@ export function registerStagedCommand(cli) {
     .option("--no-parallel", "Run the patterns one after the other")
     .option("--no-restage", "Leave the changes of the commands out of the commit")
     .action(({ config: file, ...flags }) => runConfiguredStaged({ file, flags }));
-}
-
-/**
- * Run the commands of `config` on the matching staged `files`, inside a backup of the index and
- * the unstaged changes. Returns false when no file matches a pattern.
- */
-async function runStagedTasks({ config, files, gitPaths, cwd, stream, quiet, settings }) {
-  const groups = await createCommandGroups({
-    config,
-    files: files.working,
-    cwd,
-    rootPath: gitPaths.root,
-  });
-  if (!groups.some((group) => group.fileCount > 0)) return false;
-
-  const renderer = createRenderer(stream, {
-    isTTY: Boolean(stream.isTTY) && !process.env.CI,
-    quiet,
-  });
-  try {
-    await runWithBackup({
-      allowEmpty: settings.allowEmpty,
-      restage: settings.restage,
-      rootPath: gitPaths.root,
-      gitDir: gitPaths.gitDir,
-      files,
-      execute: {
-        tasks: groups,
-        run: () => runCommandGroups(groups, { bail: settings.bail, parallel: settings.parallel }),
-      },
-      onStep: (step) => renderer.start(step),
-    });
-  } finally {
-    renderer.stop();
-  }
-  return true;
 }
 
 function advise(error) {
@@ -79,32 +42,7 @@ export async function runStaged({
   ...settings
 } = {}) {
   try {
-    if (!config) {
-      throw new Error(
-        'No staged tasks configured. Add a "staged" key to your nano-hooks configuration.',
-      );
-    }
-
-    cwd = realPath(cwd);
-    const gitPaths = await createGit(cwd).getGitPaths();
-    if (!gitPaths.root) throw new Error("Not a git repository.");
-
-    const files = await createGit(gitPaths.root).stagedFiles();
-    if (files.working.length === 0) {
-      log.info("No staged files found.", stream);
-      return;
-    }
-
-    const ran = await runStagedTasks({
-      config,
-      files,
-      gitPaths,
-      cwd,
-      stream,
-      quiet,
-      settings: resolveSettings(settings),
-    });
-    if (!ran) log.info("No files match any configured task.", stream);
+    await runStagedTasks({ config, cwd, stream, quiet, settings });
   } catch (error) {
     const causes = (error instanceof AggregateError ? error.errors : [error]).map((cause) =>
       advise(cause),

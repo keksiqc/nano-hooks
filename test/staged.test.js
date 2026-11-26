@@ -126,19 +126,33 @@ describe("runStaged", () => {
     expect(r.read("a.js")).toBe("UNO\n");
   });
 
-  it("only processes files under cwd in a sub-package", async () => {
+  it("matches tasks in the sub-package and protects and restages files across the repo", async () => {
     const r = repo({
-      "packages/a/x.js": "one\n",
-      "packages/b/y.js": "two\n",
+      "packages/a/x.js": "one\nkeep\nlast\n",
+      "packages/b/y.js": "two\nkeep\nlast\n",
+      "edit-related.js": `const fs = require("node:fs");
+const file = "packages/b/y.js";
+const content = fs.readFileSync(file, "utf8");
+fs.writeFileSync("observed.txt", content);
+fs.writeFileSync(file, content.replace("dos", "related"));
+`,
     });
-    r.write("packages/a/x.js", "uno\n");
-    r.write("packages/b/y.js", "dos\n");
-    r.git("add", "-A");
+    r.write("packages/a/x.js", "uno\nkeep\nlast\n");
+    r.write("packages/b/y.js", "dos\nkeep\nlast\n");
+    r.git("add", "packages/a/x.js", "packages/b/y.js");
+    r.write("packages/a/x.js", "uno\nkeep\nunstaged a\n");
+    r.write("packages/b/y.js", "dos\nkeep\nunstaged b\n");
 
-    await run(r, { cwd: join(r.dir, "packages/a"), config: FMT_JS });
+    await run(r, {
+      cwd: join(r.dir, "packages/a"),
+      config: { "*.js": ["node fmt.js", "node edit-related.js"] },
+    });
 
-    expect(r.git("show", ":packages/a/x.js")).toBe("UNO\n");
-    expect(r.git("show", ":packages/b/y.js")).toBe("dos\n");
+    expect(r.read("observed.txt")).toBe("dos\nkeep\nlast\n");
+    expect(r.git("show", ":packages/a/x.js")).toBe("UNO\nkeep\nlast\n");
+    expect(r.git("show", ":packages/b/y.js")).toBe("related\nkeep\nlast\n");
+    expect(r.read("packages/a/x.js")).toBe("UNO\nkeep\nunstaged a\n");
+    expect(r.read("packages/b/y.js")).toBe("related\nkeep\nunstaged b\n");
   });
 
   it("does nothing for a deletion-only commit", async () => {

@@ -1,8 +1,6 @@
 import { existsSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
-import { createGit } from "./git.js";
-
 const hasContent = (path) => existsSync(path) && statSync(path).size > 0;
 
 /** Thrown when the tasks left nothing to commit. The command adds advice on how to allow it. */
@@ -20,16 +18,17 @@ export class EmptyCommitError extends Error {
  * The recovery files in `gitDir` stay, and the error lists them, when a rollback or a
  * restoration did not finish. A later run refuses to start while they exist.
  *
- * `files` is the result of `stagedFiles`. With `restage: false`, the changes of the tasks stay
- * in the working tree. `onStep` gets each step when it starts. Throws an `AggregateError` with
- * one error per failed step.
+ * Hide unstaged changes to `hidePaths` while tasks run. If `restagePaths` is supplied, stage
+ * those paths and check for an empty commit unless `allowEmpty` is true. Both lists are relative
+ * to the directory bound to `git`. `onStep` gets each step when it starts. Throws an
+ * `AggregateError` with one error per failed step.
  */
 export async function runWithBackup({
-  allowEmpty = false,
-  restage = true,
+  git,
   gitDir,
-  rootPath,
-  files,
+  hidePaths,
+  restagePaths,
+  allowEmpty = false,
   execute,
   onStep = () => {},
 }) {
@@ -42,15 +41,14 @@ export async function runWithBackup({
 
   const errors = [];
   const workflow = {
-    git: createGit(rootPath),
+    git,
     step: createStepRunner(onStep, errors),
     original,
     unstaged,
     snapshot,
-    modified: [...files.changed, ...files.deleted],
-    files,
+    hidePaths,
+    restagePaths,
     execute,
-    restage,
     allowEmpty,
   };
 
@@ -137,25 +135,23 @@ function removeBackups(backups) {
 }
 
 /** Back up the unstaged changes, run the tasks and stage their changes. True when all passed. */
-async function runAndStage({ git, step, unstaged, modified, files, execute, restage, allowEmpty }) {
+async function runAndStage({ git, step, unstaged, hidePaths, restagePaths, execute, allowEmpty }) {
   let ok = true;
-  if (modified.length > 0) {
+  if (hidePaths.length > 0) {
     ok = await step("Backing up unstaged changes for staged files", async () => {
-      await git.diff(unstaged, modified);
-      await git.checkout(modified);
+      await git.diff(unstaged, hidePaths);
+      await git.checkout(hidePaths);
     });
   }
   ok = ok && (await step("Running tasks for staged files", () => execute.run(), execute.tasks));
-  return (
-    ok &&
-    (!restage ||
-      (await step("Applying modifications from tasks", async () => {
-        if (!allowEmpty && !(await git.wouldChange(files.working))) {
-          throw new EmptyCommitError("The commit would be empty.");
-        }
-        await git.add(files.working);
-      })))
-  );
+  if (!ok || restagePaths === undefined) return ok;
+
+  return step("Applying modifications from tasks", async () => {
+    if (!allowEmpty && !(await git.wouldChange(restagePaths))) {
+      throw new EmptyCommitError("The commit would be empty.");
+    }
+    await git.add(restagePaths);
+  });
 }
 
 async function restoreUnstaged(git, unstaged) {
@@ -173,7 +169,7 @@ async function restoreUnstaged(git, unstaged) {
 }
 
 /** Roll back after a failure, or restore the unstaged changes. True when that worked. */
-function recover(ok, { git, step, original, unstaged, modified }, indexSnapshot) {
+function recover(ok, { git, step, original, unstaged, hidePaths }, indexSnapshot) {
   if (!ok) {
     return step("Restoring to original state because of errors", async () => {
       indexSnapshot.restore();
@@ -181,7 +177,7 @@ function recover(ok, { git, step, original, unstaged, modified }, indexSnapshot)
       if (hasContent(original)) await git.apply(original);
     });
   }
-  if (modified.length > 0) {
+  if (hidePaths.length > 0) {
     return step("Restoring unstaged changes for staged files", () =>
       restoreUnstaged(git, unstaged),
     );
