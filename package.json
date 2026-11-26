@@ -1,7 +1,7 @@
 {
   "name": "nano-hooks",
   "version": "0.7.0",
-  "description": "A tiny git hooks manager with zero dependencies",
+  "description": "A tiny Git hooks manager with a staged-file runner",
   "keywords": [],
   "homepage": "https://github.com/keksiqc/nano-hooks#readme",
   "bugs": "https://github.com/keksiqc/nano-hooks/issues",
@@ -34,6 +34,9 @@
     "bench": "node bench/running-time/index.js && node bench/size/index.js",
     "release": "pnpm run lint:fix && pnpm run test && bumpp",
     "prepare": "nano-hooks"
+  },
+  "dependencies": {
+    "cac": "^7.1.1"
   },
   "devDependencies": {
     "@interfere/landmines": "^0.2.1",

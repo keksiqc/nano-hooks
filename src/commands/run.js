@@ -5,14 +5,11 @@ import { VALID_HOOKS, formatValidHooks, loadConfig } from "../config.js";
 import { envWithBin } from "../exec.js";
 import { commandScript } from "../hooks.js";
 
-export const runCommand = {
-  name: "run",
-  description: "Run one configured git hook now",
-  positionals: [{ name: "hook", description: "a hook name" }],
-  run({ options, args: [hook] }) {
-    return runHook(hook, { config: options.config });
-  },
-};
+export function registerRunCommand(cli) {
+  return cli
+    .command("run <hook>", "Run one configured git hook now")
+    .action((hook, { config }) => runHook(hook, { config }));
+}
 
 /**
  * Run one hook now, as git would: its commands in a `sh` shell. A failing command stops the

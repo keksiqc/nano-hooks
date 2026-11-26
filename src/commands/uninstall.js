@@ -4,16 +4,14 @@ import { createGit } from "../git.js";
 import { managedHooks, removeHooks } from "../hooks.js";
 import { log } from "../log.js";
 
-export const uninstallCommand = {
-  name: "uninstall",
-  description: "Remove the hooks nano-hooks manages",
-  async run() {
+export function registerUninstallCommand(cli) {
+  return cli.command("uninstall", "Remove the hooks nano-hooks manages").action(async () => {
     const { removed } = await uninstall();
     for (const name of removed) log.success(`Removed ${name}`);
     if (removed.length === 0) log.info("No nano-hooks hooks found.");
     return 0;
-  },
-};
+  });
+}
 
 /** Remove every hook script that nano-hooks manages. */
 export async function uninstall({ cwd = process.cwd() } = {}) {

@@ -10,7 +10,7 @@
 [![minzip](https://shieldcn.dev/bundlephobia/minzip/nano-hooks.svg?variant=secondary)][bundle-href]
 [![license](https://shieldcn.dev/github/license/keksiqc/nano-hooks.svg?variant=secondary)][license-href]
 
-nano-hooks is a small Git hooks manager. It has no dependencies and includes a runner for staged files.
+nano-hooks is a small Git hooks manager with a runner for staged files. Its CLI uses [CAC](https://github.com/cacjs/cac).
 
 ## Quick start
 
@@ -185,7 +185,7 @@ Median of 20 runs, 10 staged files
 + nano-hooks    172 ms
 ```
 
-The size of `node_modules` after an `npm install` of the runner alone, with all sub-dependencies:
+The size of `node_modules` in the original benchmark before nano-hooks adopted CAC, with all sub-dependencies:
 
 ```diff
 $ node bench/size/index.js

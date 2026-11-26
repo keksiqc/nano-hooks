@@ -295,13 +295,13 @@ describe("nano-hooks run", () => {
     expect(result.stdout).toBe("pushed\n");
   });
 
-  it("rejects an argument after the hook name", () => {
+  it("rejects an extra argument after the hook name", () => {
     const r = repo({ ".nano-hooks.json": hooks({ "commit-msg": "echo hi" }) });
 
     const result = nano(r, "run", "commit-msg", "MSG_FILE");
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toBe('× Unexpected argument "MSG_FILE".\n');
+    expect(result.stderr).toContain("× Unused args: `MSG_FILE`");
   });
 
   it("exits with the exit code of the command", () => {
@@ -328,7 +328,7 @@ describe("nano-hooks run", () => {
     const result = nano(repo(), "run");
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toBe('× Command "run" needs a hook name.\n');
+    expect(result.stderr).toContain("× missing required args for command `run <hook>`");
   });
 
   it("rejects an unknown hook", () => {
@@ -480,48 +480,72 @@ describe("nano-hooks --config", () => {
     const result = nano(repo(), "install", "--config");
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("× Option '-c, --config <value>' argument missing");
+    expect(result.stderr).toContain("× option `-c, --config <path>` value is missing");
   });
 
   it("rejects staged-only options on other commands", () => {
     const result = nano(repo(), "install", "--bail");
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toBe('× Option "--bail" only applies to "staged".\n');
+    expect(result.stderr).toContain("× Unknown option `--bail`");
   });
 });
 
 describe("nano-hooks usage", () => {
-  it("unknown command exits 1 and prints usage", () => {
+  it("rejects an unknown command", () => {
     const result = nano(repo(), "frobnicate");
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain('× Unknown command "frobnicate".');
-    expect(result.stderr).toContain("Usage: nano-hooks");
+    expect(result.stderr).toContain("× Unused args: `frobnicate`");
   });
 
   it("unknown staged option exits 1 with an error line", () => {
     const result = nano(repo(), "staged", "--nope");
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("× Unknown option '--nope'");
+    expect(result.stderr).toContain("× Unknown option `--nope`");
   });
 
-  it.each(["--version", "-v"])("%s prints the package version", (flag) => {
-    const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url)));
+  it.each([[["--version"]], [["-v"]], [["uninstall", "--version"]]])(
+    "%j prints the package version and exits",
+    (args) => {
+      const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url)));
 
-    const result = nano(repo(), flag);
+      const result = nano(repo(), ...args);
 
-    expect(result.status).toBe(0);
-    expect(result.stdout).toBe(`${version}\n`);
-  });
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain(`nano-hooks/${version} `);
+      expect(result.stderr).toBe("");
+    },
+  );
 
-  it("--help exits 0", () => {
+  it("--help lists the commands and global options", () => {
     const result = nano(repo(), "--help");
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain("Usage: nano-hooks");
-    expect(result.stdout).toContain("install (default)");
+    expect(result.stdout).toMatch(/^nano-hooks\/\S+\n/u);
+    expect(result.stdout).toContain("Usage:");
+    expect(result.stdout).toContain("(default: install)");
+    for (const label of [
+      "install",
+      "uninstall",
+      "staged",
+      "run <hook>",
+      "--config",
+      "--help",
+      "--version",
+    ]) {
+      expect(result.stdout).toContain(label);
+    }
+  });
+
+  it("staged --help lists the staged options", () => {
+    const result = nano(repo(), "staged", "--help");
+
+    expect(result.status).toBe(0);
+    for (const flag of ["--allow-empty", "--bail", "--no-parallel", "--no-restage"]) {
+      expect(result.stdout).toContain(flag);
+    }
   });
 });
 
