@@ -1,6 +1,6 @@
 {
   "name": "nano-hooks",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "A tiny Git hooks manager with a staged-file runner",
   "keywords": [],
   "homepage": "https://github.com/keksiqc/nano-hooks#readme",
