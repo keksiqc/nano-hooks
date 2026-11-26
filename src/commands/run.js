@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 
-import { VALID_HOOKS, loadConfig } from "../config.js";
+import { VALID_HOOKS, formatValidHooks, loadConfig } from "../config.js";
 import { envWithBin } from "../exec.js";
 import { commandScript } from "../hooks.js";
 
@@ -20,7 +20,7 @@ export const runCommand = {
  */
 export async function runHook(name, { cwd = process.cwd(), config } = {}) {
   if (!VALID_HOOKS.includes(name)) {
-    throw new Error(`Unknown git hook "${name}". Valid hooks: ${VALID_HOOKS.join(", ")}`);
+    throw new Error(`Unknown git hook "${name}". ${formatValidHooks()}`);
   }
 
   const projectRoot = resolve(cwd);

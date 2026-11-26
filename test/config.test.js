@@ -1,4 +1,6 @@
 import { execFileSync } from "node:child_process";
+import { chmod, mkdir, symlink } from "node:fs/promises";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -7,6 +9,7 @@ import { VALID_HOOKS, loadConfig, resolveSettings } from "../src/config.js";
 import { testRepo as repo } from "./helpers.js";
 
 const json = (value) => JSON.stringify(value);
+const canTestFilePermissions = process.platform !== "win32" && process.getuid?.() !== 0;
 
 async function problems(files) {
   const r = repo(files);
@@ -54,6 +57,48 @@ describe("loadConfig", () => {
 
     expect((await loadConfig(r.dir)).hooks).toEqual({ "commit-msg": "a" });
   });
+
+  it.runIf(canTestFilePermissions)(
+    "skips an inaccessible directory during discovery and reports it for an explicit path",
+    async () => {
+      const hooks = { "pre-commit": "echo ok" };
+      const r = repo({ ".nano-hooks.json": json({ hooks }) });
+      const configDir = join(r.dir, ".config");
+      await mkdir(configDir, { mode: 0o000 });
+
+      try {
+        await expect(loadConfig(r.dir)).resolves.toMatchObject({ hooks });
+        await expect(loadConfig(r.dir, { file: ".config/nanohooks.json" })).rejects.toMatchObject({
+          cause: { code: "EACCES" },
+        });
+      } finally {
+        await chmod(configDir, 0o700);
+      }
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "skips an optional candidate with a symlink loop",
+    async () => {
+      const hooks = { "pre-commit": "echo ok" };
+      const r = repo({ ".nano-hooks.json": json({ hooks }) });
+      const file = ".nanohooks.json";
+      await symlink(file, join(r.dir, file));
+
+      await expect(loadConfig(r.dir)).resolves.toMatchObject({ hooks });
+      await expect(loadConfig(r.dir, { file })).rejects.toMatchObject({ cause: { code: "ELOOP" } });
+    },
+  );
+
+  it.runIf(canTestFilePermissions)(
+    "reports a read failure for an existing discovery candidate",
+    async () => {
+      const r = repo({ ".nano-hooks.json": "{}" });
+      await chmod(join(r.dir, ".nano-hooks.json"), 0o000);
+
+      await expect(loadConfig(r.dir)).rejects.toMatchObject({ cause: { code: "EACCES" } });
+    },
+  );
 
   it.each([
     ["package.json", "nano-hooks.config.json"],

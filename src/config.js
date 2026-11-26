@@ -25,6 +25,10 @@ export const VALID_HOOKS = [
   "post-index-change",
 ];
 
+export function formatValidHooks() {
+  return `Valid hooks: ${VALID_HOOKS.join(", ")}`;
+}
+
 const CONFIG_NAME = "nano-hooks";
 const PACKAGE_FILE = "package.json";
 const CONFIG_FILES = [
@@ -66,47 +70,55 @@ const isObject = (value) => value !== null && typeof value === "object" && !Arra
 export const NON_BLANK = /\S/u;
 const nonBlankString = (value) => typeof value === "string" && NON_BLANK.test(value);
 
-async function readConfigFile(path, file, { required = false } = {}) {
-  const isJson = extname(path).toLowerCase() === ".json";
+async function readConfigFile(absolutePath, displayName, { required = false } = {}) {
+  const isJson = extname(absolutePath).toLowerCase() === ".json";
   let raw;
   try {
     // Check unsupported paths for existence without reading them.
-    if (isJson) raw = JSON.parse(await readFile(path, "utf8"));
-    else await access(path);
+    if (isJson) raw = JSON.parse(await readFile(absolutePath, "utf8"));
+    else await access(absolutePath);
   } catch (error) {
     if (error.code === "ENOENT" || error.code === "ENOTDIR") {
-      if (required) throw new Error(`Configuration file ${file} not found.`, { cause: error });
+      if (required)
+        throw new Error(`Configuration file ${displayName} not found.`, { cause: error });
       return;
     }
-    throw new Error(`Failed to read ${path}: ${error.message}`, { cause: error });
+    throw new Error(`Failed to read ${absolutePath}: ${error.message}`, { cause: error });
   }
 
   if (!isJson) {
-    throw new Error(`${file}: nano-hooks reads only JSON configuration files.`);
+    throw new Error(`${displayName}: nano-hooks reads only JSON configuration files.`);
   }
-  if (basename(path) === PACKAGE_FILE) {
-    if (!isObject(raw)) throw new Error(`${path}: ${PACKAGE_FILE} must contain an object.`);
+  if (basename(absolutePath) === PACKAGE_FILE) {
+    if (!isObject(raw)) throw new Error(`${absolutePath}: ${PACKAGE_FILE} must contain an object.`);
     if (!Object.hasOwn(raw, CONFIG_NAME)) {
-      if (required) throw new Error(`${file} has no "${CONFIG_NAME}" key.`);
+      if (required) throw new Error(`${displayName} has no "${CONFIG_NAME}" key.`);
       return;
     }
     raw = raw[CONFIG_NAME];
   }
 
-  return { file, raw };
+  return { displayName, raw };
 }
 
 /** Find the config in `cwd`. More than one place is an error. */
 async function findConfig(cwd) {
   const dir = resolve(cwd);
   const found = [];
-  for (const file of CONFIG_FILES) {
-    const source = await readConfigFile(join(dir, file), file);
+  for (const filename of CONFIG_FILES) {
+    const absolutePath = join(dir, filename);
+    // Probe first so read failures on confirmed candidates reach the caller.
+    try {
+      await access(absolutePath);
+    } catch {
+      continue;
+    }
+    const source = await readConfigFile(absolutePath, filename);
     if (source) found.push(source);
   }
 
   if (found.length > 1) {
-    const names = found.map(({ file }) => file).join(", ");
+    const names = found.map(({ displayName }) => displayName).join(", ");
     throw new Error(
       `Found more than one nano-hooks configuration: ${names}. Keep one and delete the others.`,
     );
@@ -226,15 +238,15 @@ function validateConfig(raw) {
     }
   }
 
-  if (report.unknownHook) report.problems.push(`Valid hooks: ${VALID_HOOKS.join(", ")}`);
+  if (report.unknownHook) report.problems.push(formatValidHooks());
   return report.problems;
 }
 
-function parseConfig({ file, raw }) {
+function parseConfig({ displayName, raw }) {
   const problems = validateConfig(raw);
   if (problems.length > 0) {
     const lines = problems.map((problem) => `  ${problem}`);
-    throw new Error([`Invalid nano-hooks configuration in ${file}:`, ...lines].join("\n"));
+    throw new Error([`Invalid nano-hooks configuration in ${displayName}:`, ...lines].join("\n"));
   }
 
   const { options = {}, hooks = {}, staged } = raw;

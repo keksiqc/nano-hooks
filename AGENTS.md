@@ -14,8 +14,8 @@
   `src/args.js` parses the arguments, `src/help.js` generates help from the definitions, and
   `src/cli.js` runs the selected handler or handles `--help` and `--version`. The help text
   MUST list every registered command and option. A test checks this.
-- Commands expose plain functions for the library. Any terminal output MUST go through the
-  `log` helper of a CLI handler or runner. Code that several commands share, such as
+- Commands expose plain functions for the library. Command handlers and runners MUST use the
+  `log` helper for terminal output. Code that several commands share, such as
   `src/hooks.js`, `src/git.js` and `src/config.js`, stays outside `src/commands/`. `src/index.js`
   re-exports the public functions.
 - The library entry `src/index.js` MUST NOT import `src/cli.js`, `src/args.js` or
